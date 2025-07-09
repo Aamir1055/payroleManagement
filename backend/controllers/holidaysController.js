@@ -1,53 +1,218 @@
 const db = require('../db');
 
-// GET all holidays
-exports.getHolidays = (req, res) => {
-  db.query('SELECT id, holiday_date, description FROM holidays ORDER BY holiday_date ASC', (err, results) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error', details: err.message });
-    }
+// ✅ Get all holidays
+exports.getAllHolidays = (req, res) => {
+  db.query('SELECT * FROM Holidays ORDER BY date ASC', (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
     res.json(results);
   });
 };
 
-// ADD a holiday
-exports.addHoliday = (req, res) => {
-  const { holiday_date, description } = req.body;
-
-  if (!holiday_date || !description) {
-    return res.status(400).json({ error: 'holiday_date and description are required' });
+// ✅ Get holidays for a specific month/year
+exports.getHolidaysByMonth = (req, res) => {
+  const { month, year } = req.query;
+  
+  if (!month || !year) {
+    return res.status(400).json({ error: 'Month and year are required' });
   }
 
-  const query = 'INSERT INTO holidays (holiday_date, description) VALUES (?, ?)';
-  db.query(query, [holiday_date, description], (err, result) => {
-    if (err) {
-      console.error('Database error:', err);
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({ error: 'Holiday already exists for this date' });
-      }
-      return res.status(500).json({ error: 'Database error', details: err.message });
+  const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+  const endDate = `${year}-${month.toString().padStart(2, '0')}-31`;
+  
+  db.query(
+    'SELECT * FROM Holidays WHERE date BETWEEN ? AND ? ORDER BY date ASC',
+    [startDate, endDate],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
     }
-    res.status(201).json({ 
-      message: 'Holiday added successfully',
-      id: result.insertId 
-    });
-  });
+  );
 };
 
-// DELETE a holiday
+// ✅ Calculate working days for a month
+exports.getWorkingDays = (req, res) => {
+  const { month, year } = req.query;
+  
+  if (!month || !year) {
+    return res.status(400).json({ error: 'Month and year are required' });
+  }
+
+  try {
+    const monthNum = parseInt(month);
+    const yearNum = parseInt(year);
+    
+    // Get total days in month
+    const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+    
+    // Count Sundays
+    let sundays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(yearNum, monthNum - 1, day);
+      if (date.getDay() === 0) { // Sunday = 0
+        sundays++;
+      }
+    }
+
+    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`;
+    const endDate = `${year}-${month.toString().padStart(2, '0')}-${daysInMonth}`;
+    
+    // Get holidays for the month
+    db.query(
+      'SELECT COUNT(*) as holidayCount FROM Holidays WHERE date BETWEEN ? AND ?',
+      [startDate, endDate],
+      (err, results) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        const holidayCount = results[0].holidayCount;
+        const workingDays = daysInMonth - sundays - holidayCount;
+        
+        res.json({
+          month: monthNum,
+          year: yearNum,
+          totalDays: daysInMonth,
+          sundays: sundays,
+          holidays: holidayCount,
+          workingDays: Math.max(workingDays, 0) // Ensure not negative
+        });
+      }
+    );
+  } catch (error) {
+    res.status(400).json({ error: 'Invalid month or year' });
+  }
+};
+
+// ✅ Add new holiday
+exports.addHoliday = (req, res) => {
+  const { name, date, type = 'company' } = req.body;
+
+  if (!name || !date) {
+    return res.status(400).json({ error: 'Name and date are required' });
+  }
+
+  // Validate type
+  const validTypes = ['public', 'company', 'religious'];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: 'Invalid holiday type' });
+  }
+
+  // Validate date format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(date)) {
+    return res.status(400).json({ error: 'Date must be in YYYY-MM-DD format' });
+  }
+
+  db.query(
+    'INSERT INTO Holidays (name, date, type) VALUES (?, ?, ?)',
+    [name, date, type],
+    (err, result) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(400).json({ error: 'Holiday already exists for this date' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      
+      res.status(201).json({
+        id: result.insertId,
+        name,
+        date,
+        type,
+        message: 'Holiday added successfully'
+      });
+    }
+  );
+};
+
+// ✅ Update holiday
+exports.updateHoliday = (req, res) => {
+  const { id } = req.params;
+  const { name, date, type } = req.body;
+
+  if (!name && !date && !type) {
+    return res.status(400).json({ error: 'At least one field is required for update' });
+  }
+
+  // Validate type if provided
+  if (type) {
+    const validTypes = ['public', 'company', 'religious'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({ error: 'Invalid holiday type' });
+    }
+  }
+
+  // Validate date format if provided
+  if (date) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: 'Date must be in YYYY-MM-DD format' });
+    }
+  }
+
+  // Build update query dynamically
+  const updates = [];
+  const values = [];
+  
+  if (name) {
+    updates.push('name = ?');
+    values.push(name);
+  }
+  if (date) {
+    updates.push('date = ?');
+    values.push(date);
+  }
+  if (type) {
+    updates.push('type = ?');
+    values.push(type);
+  }
+  
+  updates.push('updated_at = NOW()');
+  values.push(id);
+
+  db.query(
+    `UPDATE Holidays SET ${updates.join(', ')} WHERE id = ?`,
+    values,
+    (err, result) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(400).json({ error: 'Holiday already exists for this date' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Holiday not found' });
+      }
+      
+      res.json({ message: 'Holiday updated successfully' });
+    }
+  );
+};
+
+// ✅ Delete holiday
 exports.deleteHoliday = (req, res) => {
   const { id } = req.params;
 
-  db.query('DELETE FROM holidays WHERE id = ?', [id], (err, result) => {
-    if (err) {
-      console.error('Database error:', err);
-      return res.status(500).json({ error: 'Database error', details: err.message });
-    }
+  db.query('DELETE FROM Holidays WHERE id = ?', [id], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Holiday not found' });
     }
+    
     res.json({ message: 'Holiday deleted successfully' });
   });
+};
+
+// ✅ Get upcoming holidays
+exports.getUpcomingHolidays = (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  db.query(
+    'SELECT * FROM Holidays WHERE date >= ? ORDER BY date ASC LIMIT 10',
+    [today],
+    (err, results) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(results);
+    }
+  );
 };

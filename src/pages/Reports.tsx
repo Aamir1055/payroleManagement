@@ -1,12 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
-import { Download, Filter, Calendar, Users, DollarSign, TrendingDown } from 'lucide-react';
+import { Download, Filter, Calendar, Users, DollarSign, TrendingDown, X, Eye, AlertTriangle } from 'lucide-react';
+
+interface EmployeeDetail {
+  name: string;
+  employeeId: string;
+  office: string;
+  position: string;
+  monthlySalary: number;
+  presentDays: number;
+  halfDays: number;
+  lateDays: number;
+  leaves: number;
+  deductions: number;
+  netSalary: number;
+  workingDays: number;
+  overtimeHours?: number;
+  allowances?: number;
+  reportingTime?: string;
+  dutyHours?: number;
+}
 
 export const Reports: React.FC = () => {
-  const [selectedMonth, setSelectedMonth] = useState('2025-07');
+  const [selectedMonth, setSelectedMonth] = useState('2025-01');
   const [selectedOffice, setSelectedOffice] = useState('');
-  const [payrollData, setPayrollData] = useState<any[]>([]);
+  const [payrollData, setPayrollData] = useState<EmployeeDetail[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeDetail | null>(null);
+  const [showEmployeeDetail, setShowEmployeeDetail] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -36,8 +57,8 @@ export const Reports: React.FC = () => {
     fetchPayrollData();
   }, [selectedMonth, selectedOffice]);
 
-  const totalPayroll = payrollData.reduce((sum, emp) => sum + parseFloat(emp.netSalary), 0);
-  const totalDeductions = payrollData.reduce((sum, emp) => sum + parseFloat(emp.deductions), 0);
+  const totalPayroll = payrollData.reduce((sum, emp) => sum + parseFloat(emp.netSalary.toString()), 0);
+  const totalDeductions = payrollData.reduce((sum, emp) => sum + parseFloat(emp.deductions.toString()), 0);
   const averageAttendance = payrollData.reduce((sum, emp) => sum + emp.presentDays, 0) / (payrollData.length || 1);
 
   const totalPages = Math.ceil(payrollData.length / itemsPerPage);
@@ -51,7 +72,12 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const convertToCSV = (data: any[]) => {
+  const handleEmployeeClick = (employee: EmployeeDetail) => {
+    setSelectedEmployee(employee);
+    setShowEmployeeDetail(true);
+  };
+
+  const convertToCSV = (data: EmployeeDetail[]) => {
     if (data.length === 0) return '';
 
     const headers = [
@@ -64,8 +90,8 @@ export const Reports: React.FC = () => {
       emp.name, emp.employeeId, emp.office, emp.position,
       emp.presentDays ?? 0, emp.halfDays ?? 0, emp.lateDays ?? 0,
       emp.leaves ?? 0,
-      (parseFloat(emp.deductions) || 0).toFixed(2),
-      (parseFloat(emp.netSalary) || 0).toFixed(2),
+      (parseFloat(emp.deductions.toString()) || 0).toFixed(2),
+      (parseFloat(emp.netSalary.toString()) || 0).toFixed(2),
     ]);
 
     return [
@@ -129,6 +155,7 @@ export const Reports: React.FC = () => {
                   <option value="Los Angeles">Los Angeles</option>
                   <option value="Chicago">Chicago</option>
                   <option value="Houston">Houston</option>
+                  <option value="Dubai">Dubai</option>
                 </select>
                 <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               </div>
@@ -207,7 +234,7 @@ export const Reports: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      {["Employee", "Office", "Present Days", "Half Days", "Late Days", "Leaves", "Deductions", "Net Salary"].map((header, i) => (
+                      {["Employee", "Office", "Present Days", "Half Days", "Late Days", "Leaves", "Deductions", "Net Salary", "Actions"].map((header, i) => (
                         <th key={i} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {header}
                         </th>
@@ -216,7 +243,13 @@ export const Reports: React.FC = () => {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {paginatedData.map((emp, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
+                      <tr 
+                        key={idx} 
+                        className={`hover:bg-gray-50 cursor-pointer ${
+                          (emp.lateDays || 0) > 3 ? 'bg-red-50 hover:bg-red-100' : ''
+                        }`}
+                        onClick={() => handleEmployeeClick(emp)}
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="h-10 w-10 bg-blue-500 text-white rounded-full flex items-center justify-center font-medium">
@@ -234,10 +267,29 @@ export const Reports: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">{emp.presentDays}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">{emp.halfDays ?? 0}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">{emp.lateDays ?? 0}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="flex items-center">
+                            {emp.lateDays ?? 0}
+                            {(emp.lateDays || 0) > 3 && (
+                              <AlertTriangle className="w-4 h-4 text-red-500 ml-2" title="Excessive late days" />
+                            )}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-sm text-gray-900">{emp.leaves ?? 0}</td>
-                        <td className="px-6 py-4 text-sm text-gray-900">AED {(parseFloat(emp.deductions) || 0).toFixed(2)}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">AED {(parseFloat(emp.netSalary) || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">AED {(parseFloat(emp.deductions.toString()) || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">AED {(parseFloat(emp.netSalary.toString()) || 0).toFixed(2)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEmployeeClick(emp);
+                            }}
+                            className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -255,7 +307,7 @@ export const Reports: React.FC = () => {
                 </button>
 
                 <span className="text-sm text-gray-700">
-                  Page {currentPage} of {totalPages}
+                  Page {currentPage} of {totalPages} | Showing {startIndex + 1}-{endIndex} of {payrollData.length} employees
                 </span>
 
                 <button
@@ -269,6 +321,18 @@ export const Reports: React.FC = () => {
             </>
           )}
         </div>
+
+        {/* Employee Detail Modal */}
+        {showEmployeeDetail && selectedEmployee && (
+          <EmployeeDetailModal
+            employee={selectedEmployee}
+            month={selectedMonth}
+            onClose={() => {
+              setShowEmployeeDetail(false);
+              setSelectedEmployee(null);
+            }}
+          />
+        )}
       </div>
     </MainLayout>
   );
@@ -287,3 +351,165 @@ const SummaryCard = ({ label, value, icon, bg }: { label: string, value: string,
     </div>
   </div>
 );
+
+const EmployeeDetailModal = ({ 
+  employee, 
+  month, 
+  onClose 
+}: { 
+  employee: EmployeeDetail; 
+  month: string; 
+  onClose: () => void; 
+}) => {
+  const [year, monthNum] = month.split('-');
+  const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleDateString('en-US', { 
+    month: 'long', 
+    year: 'numeric' 
+  });
+
+  const workingDaysInMonth = employee.workingDays || 22; // Default to 22 if not provided
+  const dailySalary = employee.monthlySalary / workingDaysInMonth;
+  const earnedSalary = dailySalary * employee.presentDays;
+  const halfDayDeduction = (employee.halfDays || 0) * (dailySalary / 2);
+  const grossSalary = earnedSalary - halfDayDeduction;
+  const allowances = employee.allowances || 0;
+  const overtime = (employee.overtimeHours || 0) * (dailySalary / 8); // Assuming 8 hours per day
+  const totalEarnings = grossSalary + allowances + overtime;
+  const finalNetSalary = totalEarnings - employee.deductions;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-900">Salary Breakdown</h2>
+            <p className="text-gray-600">{employee.name} - {monthName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Employee Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h3 className="font-semibold text-blue-900 mb-2">Employee Details</h3>
+              <div className="space-y-1 text-sm">
+                <p><span className="font-medium">ID:</span> {employee.employeeId}</p>
+                <p><span className="font-medium">Office:</span> {employee.office}</p>
+                <p><span className="font-medium">Position:</span> {employee.position}</p>
+                <p><span className="font-medium">Monthly Salary:</span> AED {employee.monthlySalary.toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="bg-green-50 rounded-lg p-4">
+              <h3 className="font-semibold text-green-900 mb-2">Attendance Summary</h3>
+              <div className="space-y-1 text-sm">
+                <p><span className="font-medium">Working Days:</span> {workingDaysInMonth}</p>
+                <p><span className="font-medium">Present Days:</span> {employee.presentDays}</p>
+                <p><span className="font-medium">Half Days:</span> {employee.halfDays || 0}</p>
+                <p className={`${(employee.lateDays || 0) > 3 ? 'text-red-600 font-semibold' : ''}`}>
+                  <span className="font-medium">Late Days:</span> {employee.lateDays || 0}
+                  {(employee.lateDays || 0) > 3 && ' ⚠️ Excessive'}
+                </p>
+                <p><span className="font-medium">Leaves:</span> {employee.leaves || 0}</p>
+              </div>
+            </div>
+
+            <div className="bg-purple-50 rounded-lg p-4">
+              <h3 className="font-semibold text-purple-900 mb-2">Calculations</h3>
+              <div className="space-y-1 text-sm">
+                <p><span className="font-medium">Daily Rate:</span> AED {dailySalary.toFixed(2)}</p>
+                <p><span className="font-medium">Attendance %:</span> {((employee.presentDays / workingDaysInMonth) * 100).toFixed(1)}%</p>
+                <p><span className="font-medium">Overtime Hours:</span> {employee.overtimeHours || 0}</p>
+                <p><span className="font-medium">Allowances:</span> AED {allowances.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Salary Breakdown */}
+          <div className="bg-gray-50 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Detailed Salary Breakdown</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Earnings */}
+              <div>
+                <h4 className="font-medium text-green-700 mb-3">Earnings</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Basic Salary ({employee.presentDays} days)</span>
+                    <span className="font-medium">AED {earnedSalary.toFixed(2)}</span>
+                  </div>
+                  {halfDayDeduction > 0 && (
+                    <div className="flex justify-between text-orange-600">
+                      <span>Half Day Deduction ({employee.halfDays} days)</span>
+                      <span className="font-medium">-AED {halfDayDeduction.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {allowances > 0 && (
+                    <div className="flex justify-between">
+                      <span>Allowances</span>
+                      <span className="font-medium">AED {allowances.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {overtime > 0 && (
+                    <div className="flex justify-between">
+                      <span>Overtime ({employee.overtimeHours} hours)</span>
+                      <span className="font-medium">AED {overtime.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-2 flex justify-between font-semibold text-green-700">
+                    <span>Total Earnings</span>
+                    <span>AED {totalEarnings.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deductions */}
+              <div>
+                <h4 className="font-medium text-red-700 mb-3">Deductions</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span>Total Deductions</span>
+                    <span className="font-medium">AED {employee.deductions.toFixed(2)}</span>
+                  </div>
+                  {(employee.lateDays || 0) > 3 && (
+                    <div className="text-red-600 text-sm">
+                      ⚠️ Excessive late days may affect future salary
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Net Salary */}
+            <div className="mt-6 pt-4 border-t border-gray-300">
+              <div className="flex justify-between items-center text-xl font-bold">
+                <span>Net Salary</span>
+                <span className="text-blue-600">AED {finalNetSalary.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Late Days Warning */}
+          {(employee.lateDays || 0) > 3 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+                <h4 className="font-semibold text-red-800">Attendance Alert</h4>
+              </div>
+              <p className="text-red-700 mt-1">
+                This employee has {employee.lateDays} late days this month, which exceeds the acceptable limit of 3 days. 
+                Please consider discussing attendance improvement with the employee.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
