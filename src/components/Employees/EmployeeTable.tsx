@@ -18,6 +18,13 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
   const [sortField, setSortField] = useState<keyof Employee>('fullName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+  // Get status display text
+  const getStatusDisplay = (status: string | number) => {
+    if (status === 0 || status === '0' || status === 'inactive') return { text: 'Inactive', color: 'red' };
+    if (status === 1 || status === '1' || status === 'active') return { text: 'Active', color: 'green' };
+    return { text: String(status), color: 'gray' };
+  };
+
   const sortedEmployees = [...employees].sort((a, b) => {
     const aValue = a[sortField];
     const bValue = b[sortField];
@@ -55,30 +62,54 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
                 Employee
+                {sortField === 'fullName' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
               </th>
               <th
                 onClick={() => handleSort('office')}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
                 Office & Position
+                {sortField === 'office' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
               </th>
               <th
                 onClick={() => handleSort('monthlySalary')}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
                 Salary
+                {sortField === 'monthlySalary' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
               </th>
               <th
                 onClick={() => handleSort('dutyHours')}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
-                Duty Hours
+                Schedule
+                {sortField === 'dutyHours' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
               </th>
               <th
                 onClick={() => handleSort('joiningDate')}
                 className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
               >
                 Joining Date
+                {sortField === 'joiningDate' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
+              </th>
+              <th
+                onClick={() => handleSort('status')}
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              >
+                Status
+                {sortField === 'status' && (
+                  <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                )}
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -86,71 +117,88 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {sortedEmployees.map((employee) => (
-              <tr key={employee.employeeId} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
-                      {employee.fullName?.charAt(0).toUpperCase()}
+            {sortedEmployees.map((employee) => {
+              const statusInfo = getStatusDisplay(employee.status);
+              return (
+                <tr key={employee.employeeId} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold">
+                        {employee.fullName?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{employee.fullName}</div>
+                        <div className="text-sm text-gray-500">{employee.employeeId}</div>
+                        <div className="text-xs text-gray-400">{employee.email}</div>
+                      </div>
                     </div>
-                    <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{employee.fullName}</div>
-                      <div className="text-sm text-gray-500">{employee.employeeId}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 font-medium">{employee.office}</div>
+                    <div className="text-sm text-gray-500">{employee.position}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">
+                      {employee.monthlySalary !== undefined && employee.monthlySalary !== null
+                        ? `AED ${Number(employee.monthlySalary).toLocaleString()}`
+                        : 'Not set'}
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{employee.office}</div>
-                  <div className="text-sm text-gray-500">{employee.position}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">
-                    {employee.monthlySalary !== undefined && employee.monthlySalary !== null
-                      ? `AED ${Number(employee.monthlySalary).toFixed(2)}`
-
-                      : ''}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{employee.dutyHours} hrs</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">
-                    {employee.joiningDate && !isNaN(new Date(employee.joiningDate).getTime())
-                      ? new Date(employee.joiningDate).toLocaleDateString('en-GB')
-                      : 'Invalid Date'}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex items-center justify-end space-x-2">
-                    <button
-                      onClick={() => onView(employee)}
-                      className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
-                      title="View"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onEdit(employee)}
-                      className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onDelete(employee.employeeId)}
-                      className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{employee.dutyHours || 8} hrs</div>
+                    <div className="text-xs text-gray-500">
+                      {employee.reportingTime || '09:00'} start
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {employee.joiningDate && !isNaN(new Date(employee.joiningDate).getTime())
+                        ? new Date(employee.joiningDate).toLocaleDateString('en-GB')
+                        : 'Invalid Date'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      statusInfo.color === 'green' 
+                        ? 'bg-green-100 text-green-800' 
+                        : statusInfo.color === 'red'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {statusInfo.text}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => onView(employee)}
+                        className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                        title="View Details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onEdit(employee)}
+                        className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50"
+                        title="Edit Employee"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(employee.employeeId)}
+                        className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                        title="Delete Employee"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {sortedEmployees.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center text-gray-500 text-sm">
+                <td colSpan={7} className="px-6 py-4 text-center text-gray-500 text-sm">
                   No employees found.
                 </td>
               </tr>

@@ -9,6 +9,22 @@ const db = mysql.createConnection({
 });
 
 const migrations = [
+  // Create Users table for authentication
+  `CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    role ENUM('admin', 'floor_manager', 'employee') NOT NULL DEFAULT 'employee',
+    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
+    two_factor_secret VARCHAR(255) NULL,
+    two_factor_temp_secret VARCHAR(255) NULL,
+    last_login TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`,
+
   // Create OfficeMaster table
   `CREATE TABLE IF NOT EXISTS OfficeMaster (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,10 +71,25 @@ const migrations = [
     status ENUM('active', 'inactive') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  )`,
+
+  // Create Holidays table
+  `CREATE TABLE IF NOT EXISTS Holidays (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    date DATE NOT NULL UNIQUE,
+    type ENUM('public', 'company', 'religious') DEFAULT 'company',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   )`
 ];
 
 const seedData = [
+  // Insert default admin user
+  `INSERT IGNORE INTO users (username, email, password, role, status) VALUES 
+  ('admin', 'admin@payroll.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj0kEa1EJ5LG', 'admin', 'active')`,
+  // Password is 'admin123' - change this in production!
+
   // Insert sample offices
   `INSERT IGNORE INTO OfficeMaster (name) VALUES 
   ('New York'),
@@ -73,7 +104,14 @@ const seedData = [
   ('Data Analyst'),
   ('Product Manager'),
   ('Designer'),
-  ('HR Specialist')`
+  ('HR Specialist')`,
+
+  // Insert common holidays
+  `INSERT IGNORE INTO Holidays (name, date, type) VALUES 
+  ('New Year Day', '2024-01-01', 'public'),
+  ('Independence Day', '2024-07-04', 'public'),
+  ('Christmas Day', '2024-12-25', 'public'),
+  ('Thanksgiving', '2024-11-28', 'public')`
 ];
 
 const relationshipData = [
@@ -150,6 +188,13 @@ async function runMigration() {
     }
 
     console.log('Migration completed successfully!');
+    console.log('');
+    console.log('Default admin credentials:');
+    console.log('Username: admin');
+    console.log('Email: admin@payroll.com');
+    console.log('Password: admin123');
+    console.log('');
+    console.log('Please change the admin password after first login!');
     
   } catch (error) {
     console.error('Migration failed:', error);

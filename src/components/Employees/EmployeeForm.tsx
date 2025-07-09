@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Employee } from '../../types';
-import { X } from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 
 interface EmployeeFormProps {
@@ -43,6 +43,14 @@ const formatDate = (dateString: string): string => {
   return date.toISOString().split('T')[0];
 };
 
+// Validation patterns
+const validationPatterns = {
+  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  name: /^[a-zA-Z\s]+$/,
+  positiveNumber: /^\d+(\.\d+)?$/,
+  wholeNumber: /^\d+$/
+};
+
 export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   employee,
   onSubmit,
@@ -54,13 +62,16 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const [positions, setPositions] = useState<string[]>([]);
   const [officePositions, setOfficePositions] = useState<OfficePosition[]>([]);
   const [availablePositions, setAvailablePositions] = useState<string[]>([]);
+  const [isGeneratingId, setIsGeneratingId] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     watch,
-    setValue
+    setValue,
+    setError,
+    clearErrors
   } = useForm<FormData>({
     defaultValues: employee ? {
       employeeId: employee.employeeId,
@@ -75,12 +86,32 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
       joiningDate: employee.joiningDate ? formatDate(employee.joiningDate) : '',
       status: employee.status
     } : {
+      employeeId: '',
       dutyHours: 8,
       reportingTime: '09:00',
       allowedLateDays: 3,
       status: 'active'
     }
   });
+
+  // Auto-generate employee ID for new employees
+  useEffect(() => {
+    if (!employee && !viewOnly) {
+      generateEmployeeId();
+    }
+  }, [employee, viewOnly]);
+
+  const generateEmployeeId = async () => {
+    setIsGeneratingId(true);
+    try {
+      const response = await axios.get('http://localhost:5000/api/employees/next-id');
+      setValue('employeeId', response.data.nextEmployeeId);
+    } catch (error) {
+      console.error('Failed to generate employee ID:', error);
+      setError('employeeId', { message: 'Failed to generate employee ID. Please enter manually.' });
+    }
+    setIsGeneratingId(false);
+  };
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -114,9 +145,9 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   // Update available positions when office changes
   useEffect(() => {
     if (selectedOffice && officePositions.length > 0) {
-      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      const officeData = officePositions.find((op: OfficePosition) => op.office_name === selectedOffice);
       if (officeData) {
-        const positionsForOffice = officeData.positions.map(p => p.position_name);
+        const positionsForOffice = officeData.positions.map((p: any) => p.position_name);
         setAvailablePositions(positionsForOffice);
         
         // Clear position if it's not available in the selected office
@@ -135,9 +166,9 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   // Auto-populate reporting time and duty hours when office and position are selected
   useEffect(() => {
     if (!viewOnly && selectedOffice && selectedPosition && officePositions.length > 0) {
-      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      const officeData = officePositions.find((op: OfficePosition) => op.office_name === selectedOffice);
       if (officeData) {
-        const positionData = officeData.positions.find(p => p.position_name === selectedPosition);
+        const positionData = officeData.positions.find((p: any) => p.position_name === selectedPosition);
         if (positionData) {
           setValue('reportingTime', positionData.reporting_time);
           setValue('dutyHours', positionData.duty_hours);
@@ -146,10 +177,45 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     }
   }, [selectedOffice, selectedPosition, officePositions, setValue, viewOnly]);
 
-  const handleFormSubmit = (data: FormData) => {
+  // Custom validation functions
+  const validateName = (value: string) => {
+    if (!value) return 'Name is required';
+    if (!validationPatterns.name.test(value)) return 'Name can only contain letters and spaces';
+    if (value.length < 2) return 'Name must be at least 2 characters';
+    return true;
+  };
+
+  const validateEmail = (value: string) => {
+    if (!value) return 'Email is required';
+    if (!validationPatterns.email.test(value)) return 'Please enter a valid email address';
+    return true;
+  };
+
+  const validateSalary = (value: number) => {
+    if (!value) return 'Monthly salary is required';
+    if (value <= 0) return 'Salary must be greater than 0';
+    if (value > 1000000) return 'Salary seems unreasonably high';
+    return true;
+  };
+
+  const handleFormSubmit = async (data: FormData) => {
     if (!viewOnly && onSubmit) {
-      onSubmit(data);
-      onClose();
+      try {
+        // Additional validation
+        if (!data.employeeId.trim()) {
+          setError('employeeId', { message: 'Employee ID is required' });
+          return;
+        }
+
+        await onSubmit(data);
+        
+        // Show success message
+        alert('Employee saved successfully!');
+        onClose();
+      } catch (error) {
+        console.error('Error saving employee:', error);
+        alert('Failed to save employee. Please try again.');
+      }
     }
   };
 
@@ -158,13 +224,20 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     if (viewOnly) return true;
     
     if (selectedOffice && selectedPosition && officePositions.length > 0) {
-      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      const officeData = officePositions.find((op: OfficePosition) => op.office_name === selectedOffice);
       if (officeData) {
-        const positionData = officeData.positions.find(p => p.position_name === selectedPosition);
+        const positionData = officeData.positions.find((p: any) => p.position_name === selectedPosition);
         return !!positionData; // readonly if relationship exists
       }
     }
     return false;
+  };
+
+  // Get status display text
+  const getStatusDisplay = (status: string | number) => {
+    if (status === 0 || status === '0' || status === 'inactive') return 'Inactive';
+    if (status === 1 || status === '1' || status === 'active') return 'Active';
+    return status;
   };
 
   return (
@@ -184,31 +257,113 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {[ 
-              { label: 'Employee ID', name: 'employeeId', type: 'text', placeholder: 'EMP001' },
-              { label: 'Full Name', name: 'fullName', type: 'text', placeholder: 'John Doe' },
-              { label: 'Email', name: 'email', type: 'email', placeholder: 'john@company.com' },
-              { label: 'Monthly Salary', name: 'monthlySalary', type: 'number', placeholder: '5000' },
-              { label: 'Allowed Late Days', name: 'allowedLateDays', type: 'number', placeholder: '3' }
-            ].map((field, index) => (
-              <div key={index}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">{field.label}</label>
-                <input
-                  type={field.type}
-                  {...register(field.name as keyof FormData, {
-                    required: !viewOnly ? `${field.label} is required` : false
-                  })}
-                  disabled={viewOnly}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                  placeholder={field.placeholder}
-                />
-                {errors[field.name as keyof FormData] && (
-                  <p className="mt-1 text-sm text-red-600">
-                    {errors[field.name as keyof FormData]?.message}
-                  </p>
+            
+            {/* Employee ID with auto-generation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Employee ID
+                {!employee && !viewOnly && (
+                  <button
+                    type="button"
+                    onClick={generateEmployeeId}
+                    disabled={isGeneratingId}
+                    className="ml-2 text-blue-600 hover:text-blue-800 text-xs"
+                  >
+                    <RefreshCw className={`w-3 h-3 inline ${isGeneratingId ? 'animate-spin' : ''}`} />
+                    {isGeneratingId ? 'Generating...' : 'Regenerate'}
+                  </button>
                 )}
-              </div>
-            ))}
+              </label>
+              <input
+                type="text"
+                {...register('employeeId', {
+                  required: 'Employee ID is required',
+                  pattern: {
+                    value: /^EMP\d{3}$/,
+                    message: 'Employee ID must be in format EMP001'
+                  }
+                })}
+                disabled={viewOnly || !!employee}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="EMP001"
+              />
+              {errors.employeeId && (
+                <p className="mt-1 text-sm text-red-600">{errors.employeeId.message}</p>
+              )}
+            </div>
+
+            {/* Full Name with validation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+              <input
+                type="text"
+                {...register('fullName', { validate: validateName })}
+                disabled={viewOnly}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="John Doe"
+              />
+              {errors.fullName && (
+                <p className="mt-1 text-sm text-red-600">{errors.fullName.message}</p>
+              )}
+            </div>
+
+            {/* Email with validation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                {...register('email', { validate: validateEmail })}
+                disabled={viewOnly}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="john@company.com"
+              />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              )}
+            </div>
+
+            {/* Monthly Salary with validation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Monthly Salary (AED)</label>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                {...register('monthlySalary', { 
+                  required: 'Monthly salary is required',
+                  validate: validateSalary,
+                  valueAsNumber: true
+                })}
+                disabled={viewOnly}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="5000"
+              />
+              {errors.monthlySalary && (
+                <p className="mt-1 text-sm text-red-600">{errors.monthlySalary.message}</p>
+              )}
+            </div>
+
+            {/* Allowed Late Days with validation */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Late Days</label>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                {...register('allowedLateDays', {
+                  required: 'Allowed late days is required',
+                  min: { value: 0, message: 'Cannot be negative' },
+                  max: { value: 10, message: 'Cannot exceed 10 days' },
+                  valueAsNumber: true
+                })}
+                disabled={viewOnly}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+                placeholder="3"
+              />
+              {errors.allowedLateDays && (
+                <p className="mt-1 text-sm text-red-600">{errors.allowedLateDays.message}</p>
+              )}
+            </div>
 
             {/* Duty Hours - Auto-populated and conditionally readonly */}
             <div>
@@ -220,8 +375,13 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               </label>
               <input
                 type="number"
+                min="1"
+                max="12"
                 {...register('dutyHours', {
-                  required: !viewOnly ? 'Duty Hours is required' : false
+                  required: 'Duty hours is required',
+                  min: { value: 1, message: 'Minimum 1 hour' },
+                  max: { value: 12, message: 'Maximum 12 hours' },
+                  valueAsNumber: true
                 })}
                 disabled={viewOnly || shouldBeReadonly('dutyHours')}
                 className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
@@ -245,7 +405,7 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               <input
                 type="time"
                 {...register('reportingTime', {
-                  required: !viewOnly ? 'Reporting Time is required' : false
+                  required: 'Reporting time is required'
                 })}
                 disabled={viewOnly || shouldBeReadonly('reportingTime')}
                 className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
@@ -257,23 +417,15 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               )}
             </div>
 
+            {/* Joining Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Joining Date</label>
               <input
                 type="date"
-                max="2099-12-31"
+                max={new Date().toISOString().split('T')[0]}
                 {...register('joiningDate', {
-                  required: !viewOnly ? 'Joining Date is required' : false,
-                  pattern: {
-                    value: /^\d{4}-\d{2}-\d{2}$/,
-                    message: 'Invalid date format (YYYY-MM-DD)'
-                  }
+                  required: 'Joining date is required'
                 })}
-                onInput={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  if (e.target.value.length > 10) {
-                    e.target.value = e.target.value.slice(0, 10);
-                  }
-                }}
                 disabled={viewOnly}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
               />
@@ -282,10 +434,11 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               )}
             </div>
 
+            {/* Office */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Office</label>
               <select
-                {...register('office', { required: !viewOnly ? 'Office is required' : false })}
+                {...register('office', { required: 'Office is required' })}
                 disabled={viewOnly}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               >
@@ -297,10 +450,11 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               {errors.office && <p className="mt-1 text-sm text-red-600">{errors.office.message}</p>}
             </div>
 
+            {/* Position */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
               <select
-                {...register('position', { required: !viewOnly ? 'Position is required' : false })}
+                {...register('position', { required: 'Position is required' })}
                 disabled={viewOnly}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               >
@@ -315,10 +469,11 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               )}
             </div>
 
+            {/* Status with proper display */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
               <select
-                {...register('status', { required: !viewOnly ? 'Status is required' : false })}
+                {...register('status', { required: 'Status is required' })}
                 disabled={viewOnly}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               >

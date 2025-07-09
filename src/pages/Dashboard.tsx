@@ -20,6 +20,9 @@ export const Dashboard: React.FC = () => {
   // Enhanced input states for new office with positions
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPositionName, setNewPositionName] = useState('');
+  const [selectedOfficeForPosition, setSelectedOfficeForPosition] = useState('');
+  const [positionReportingTime, setPositionReportingTime] = useState('09:00');
+  const [positionDutyHours, setPositionDutyHours] = useState(8);
   const [officePositions, setOfficePositions] = useState<{
     positionName: string;
     reportingTime: string;
@@ -47,6 +50,15 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchOfficeSummary = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/employees/summary-by-office');
+      setOfficeSummary(response.data);
+    } catch (error) {
+      console.error('Error fetching office summary:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchTotalEmployees = async () => {
       try {
@@ -66,30 +78,26 @@ export const Dashboard: React.FC = () => {
       }
     };
 
-    const fetchOfficeSummary = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/api/employees/summary-by-office');
-        setOfficeSummary(response.data);
-      } catch (error) {
-        console.error('Error fetching office summary:', error);
-      }
-    };
-
     fetchTotalEmployees();
     fetchTotalMonthlySalary();
     fetchOfficeSummary();
-
     fetchOffices();
     fetchPositions();
   }, []);
 
   const handleAddOffice = async () => {
-    if (!newOfficeName.trim()) return alert('Please enter an office name');
-    if (officePositions.length === 0) return alert('Please add at least one position for this office');
+    if (!newOfficeName.trim()) {
+      alert('Please enter an office name');
+      return;
+    }
+    if (officePositions.length === 0) {
+      alert('Please add at least one position for this office');
+      return;
+    }
     
     try {
       // Create office with positions
-      const response = await axios.post('http://localhost:5000/api/masters/offices-with-positions', {
+      await axios.post('http://localhost:5000/api/masters/offices-with-positions', {
         officeName: newOfficeName,
         positions: officePositions
       });
@@ -98,12 +106,14 @@ export const Dashboard: React.FC = () => {
       setNewOfficeName('');
       setOfficePositions([]);
       setShowOfficeModal(false);
-      fetchOffices();
-      fetchPositions();
       
-      // Refresh office summary to show new office
-      const officeSummaryResponse = await axios.get('http://localhost:5000/api/employees/summary-by-office');
-      setOfficeSummary(officeSummaryResponse.data);
+      // Refresh all data
+      await Promise.all([
+        fetchOffices(),
+        fetchPositions(),
+        fetchOfficeSummary()
+      ]);
+      
     } catch (error) {
       console.error(error);
       alert('Failed to add office');
@@ -111,13 +121,37 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleAddPosition = async () => {
-    if (!newPositionName.trim()) return alert('Please enter a position name');
+    if (!newPositionName.trim()) {
+      alert('Please enter a position name');
+      return;
+    }
+    if (!selectedOfficeForPosition) {
+      alert('Please select an office for this position');
+      return;
+    }
+    
     try {
-      await axios.post('http://localhost:5000/api/masters/positions', { name: newPositionName });
+      // Create position for specific office
+      await axios.post('http://localhost:5000/api/masters/office-specific-position', {
+        officeName: selectedOfficeForPosition,
+        positionName: newPositionName,
+        reportingTime: positionReportingTime,
+        dutyHours: positionDutyHours
+      });
+      
       alert('Position added successfully!');
       setNewPositionName('');
+      setSelectedOfficeForPosition('');
+      setPositionReportingTime('09:00');
+      setPositionDutyHours(8);
       setShowPositionModal(false);
-      fetchPositions();
+      
+      // Refresh data
+      await Promise.all([
+        fetchPositions(),
+        fetchOfficeSummary()
+      ]);
+      
     } catch (error) {
       console.error(error);
       alert('Failed to add position');
@@ -168,22 +202,30 @@ export const Dashboard: React.FC = () => {
           />
         </div>
 
-        {/* Office-wise Cards */}
-        {officeSummary.length > 0 && (
+        {/* Office-wise Cards - Enhanced with real-time updates */}
+        {officeSummary.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {officeSummary.map((office, index) => (
               <MetricCard
-                key={index}
+                key={`${office.office}-${index}`}
                 title={`${office.office} Office`}
                 value={
                   <>
-                    <div className="text-sm font-semibold">Employees: {office.totalEmployees}</div>
-                    <div className="text-sm font-semibold">AED {office.totalSalary.toLocaleString()}</div>
+                    <div className="text-sm font-semibold text-blue-600">
+                      Employees: {office.totalEmployees || 0}
+                    </div>
+                    <div className="text-sm font-semibold text-green-600">
+                      Salary: AED {(office.totalSalary || 0).toLocaleString()}
+                    </div>
                   </>
                 }
                 color="purple"
               />
             ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-lg p-8 text-center">
+            <p className="text-gray-500">No office data available. Add offices to see summaries here.</p>
           </div>
         )}
 
@@ -287,21 +329,70 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Position Modal */}
+        {/* Enhanced Position Modal - Office-Specific */}
         {showPositionModal && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
-            <div className="bg-white rounded p-6 w-80">
-              <h2 className="text-xl font-semibold mb-4">Add New Position</h2>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
-                placeholder="Position Name"
-                value={newPositionName}
-                onChange={(e) => setNewPositionName(e.target.value)}
-              />
-              <div className="flex justify-end gap-2">
+            <div className="bg-white rounded p-6 w-96">
+              <h2 className="text-xl font-semibold mb-4">Add Position to Office</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Office</label>
+                  <select
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    value={selectedOfficeForPosition}
+                    onChange={(e) => setSelectedOfficeForPosition(e.target.value)}
+                  >
+                    <option value="">Choose an office...</option>
+                    {offices.map((office) => (
+                      <option key={office} value={office}>{office}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Position Name</label>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    placeholder="Position Name"
+                    value={newPositionName}
+                    onChange={(e) => setNewPositionName(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Reporting Time</label>
+                  <input
+                    type="time"
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    value={positionReportingTime}
+                    onChange={(e) => setPositionReportingTime(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Duty Hours</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="12"
+                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    value={positionDutyHours}
+                    onChange={(e) => setPositionDutyHours(parseInt(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-6">
                 <button
-                  onClick={() => setShowPositionModal(false)}
+                  onClick={() => {
+                    setShowPositionModal(false);
+                    setNewPositionName('');
+                    setSelectedOfficeForPosition('');
+                    setPositionReportingTime('09:00');
+                    setPositionDutyHours(8);
+                  }}
                   className="px-4 py-2 border rounded"
                 >
                   Cancel
@@ -310,7 +401,7 @@ export const Dashboard: React.FC = () => {
                   onClick={handleAddPosition}
                   className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
                 >
-                  Save
+                  Add Position
                 </button>
               </div>
             </div>

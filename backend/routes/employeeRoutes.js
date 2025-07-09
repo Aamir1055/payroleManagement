@@ -5,6 +5,7 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
 router.get('/', employeeController.getEmployees);
+router.get('/next-id', employeeController.getNextEmployeeId);
 router.get('/count', employeeController.getEmployeeCount); // if not added
 router.get('/salary/total', employeeController.getTotalMonthlySalary); // if not added
 router.get('/summary-by-office', employeeController.getSummaryByOffice); // ✅ Add this

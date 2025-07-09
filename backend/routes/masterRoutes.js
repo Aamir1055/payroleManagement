@@ -11,5 +11,6 @@ router.get('/office-positions', masterController.getOfficePositions);
 // -------- POSITION ROUTES --------
 router.get('/positions', masterController.getAllPositions);
 router.post('/positions', masterController.createPosition);
+router.post('/office-specific-position', masterController.createOfficeSpecificPosition);
 
 module.exports = router;
