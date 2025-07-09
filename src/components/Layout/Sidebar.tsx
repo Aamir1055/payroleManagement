@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -6,7 +6,12 @@ import {
   Upload, 
   FileText, 
   Settings,
-  LogOut
+  LogOut,
+  Building2,
+  Briefcase,
+  ChevronDown,
+  ChevronRight,
+  Plus
 } from 'lucide-react';
 
 const navigation = [
@@ -21,9 +26,13 @@ const navigation = [
 interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onAddOffice?: () => void;
+  onAddPosition?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, onAddOffice, onAddPosition }) => {
+  const [masterDataExpanded, setMasterDataExpanded] = useState(false);
+
   return (
     <>
       {/* Mobile backdrop */}
@@ -65,6 +74,51 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 {item.name}
               </NavLink>
             ))}
+
+            {/* Master Data Section */}
+            <div className="pt-4 border-t border-gray-200">
+              <button
+                onClick={() => setMasterDataExpanded(!masterDataExpanded)}
+                className="flex items-center justify-between w-full px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200"
+              >
+                <div className="flex items-center">
+                  <Settings className="w-5 h-5 mr-3" />
+                  Master Data
+                </div>
+                {masterDataExpanded ? (
+                  <ChevronDown className="w-4 h-4" />
+                ) : (
+                  <ChevronRight className="w-4 h-4" />
+                )}
+              </button>
+              
+              {masterDataExpanded && (
+                <div className="ml-4 mt-2 space-y-1">
+                  <button
+                    onClick={() => {
+                      onAddOffice?.();
+                      window.innerWidth < 1024 && onClose();
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
+                  >
+                    <Building2 className="w-4 h-4 mr-3" />
+                    <Plus className="w-3 h-3 mr-2" />
+                    Add Office
+                  </button>
+                  <button
+                    onClick={() => {
+                      onAddPosition?.();
+                      window.innerWidth < 1024 && onClose();
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-md transition-colors duration-200"
+                  >
+                    <Briefcase className="w-4 h-4 mr-3" />
+                    <Plus className="w-3 h-3 mr-2" />
+                    Add Position
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
           
           {/* User section */}

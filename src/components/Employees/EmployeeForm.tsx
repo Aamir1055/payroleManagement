@@ -26,36 +26,16 @@ interface FormData {
   status: 'active' | 'inactive';
 }
 
-const officePositionConfig: Record<string, Record<string, { reportingTime: string; dutyHours: number }>> = {
-  'New York': {
-    'Software Engineer': { reportingTime: '09:00', dutyHours: 8 },
-    'Product Manager': { reportingTime: '10:00', dutyHours: 7 },
-    'Designer': { reportingTime: '09:30', dutyHours: 7 },
-    'Data Analyst': { reportingTime: '09:00', dutyHours: 8 },
-    'HR Specialist': { reportingTime: '09:00', dutyHours: 8 },
-  },
-  'Los Angeles': {
-    'Software Engineer': { reportingTime: '10:00', dutyHours: 8 },
-    'Product Manager': { reportingTime: '10:30', dutyHours: 7 },
-    'Designer': { reportingTime: '10:00', dutyHours: 7 },
-    'Data Analyst': { reportingTime: '09:30', dutyHours: 8 },
-    'HR Specialist': { reportingTime: '09:00', dutyHours: 8 },
-  },
-  'Chicago': {
-    'Software Engineer': { reportingTime: '09:00', dutyHours: 8 },
-    'Product Manager': { reportingTime: '09:30', dutyHours: 7 },
-    'Designer': { reportingTime: '09:00', dutyHours: 7 },
-    'Data Analyst': { reportingTime: '09:15', dutyHours: 8 },
-    'HR Specialist': { reportingTime: '09:00', dutyHours: 8 },
-  },
-  'Houston': {
-    'Software Engineer': { reportingTime: '08:30', dutyHours: 8 },
-    'Product Manager': { reportingTime: '09:00', dutyHours: 7 },
-    'Designer': { reportingTime: '09:00', dutyHours: 7 },
-    'Data Analyst': { reportingTime: '09:00', dutyHours: 8 },
-    'HR Specialist': { reportingTime: '09:00', dutyHours: 8 },
-  }
-};
+interface OfficePosition {
+  office_id: number;
+  office_name: string;
+  positions: {
+    position_id: number;
+    position_name: string;
+    reporting_time: string;
+    duty_hours: number;
+  }[];
+}
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -72,6 +52,8 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
 }) => {
   const [offices, setOffices] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
+  const [officePositions, setOfficePositions] = useState<OfficePosition[]>([]);
+  const [availablePositions, setAvailablePositions] = useState<string[]>([]);
 
   const {
     register,
@@ -103,14 +85,17 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   useEffect(() => {
     const fetchMasterData = async () => {
       try {
-        const [officesRes, positionsRes] = await Promise.all([
+        const [officesRes, positionsRes, officePositionsRes] = await Promise.all([
           axios.get('http://localhost:5000/api/masters/offices'),
           axios.get('http://localhost:5000/api/masters/positions'),
+          axios.get('http://localhost:5000/api/masters/office-positions')
         ]);
+        
         setOffices(officesRes.data.map((o: any) => o.name || o));
         setPositions(positionsRes.data.map((p: any) => p.name || p));
+        setOfficePositions(officePositionsRes.data);
       } catch (err) {
-        console.error('Failed to fetch offices or positions:', err);
+        console.error('Failed to fetch master data:', err);
       }
     };
     fetchMasterData();
@@ -126,21 +111,60 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const selectedOffice = watch('office');
   const selectedPosition = watch('position');
 
+  // Update available positions when office changes
   useEffect(() => {
-    if (!viewOnly && selectedOffice && selectedPosition) {
-      const config = officePositionConfig[selectedOffice]?.[selectedPosition];
-      if (config) {
-        setValue('reportingTime', config.reportingTime);
-        setValue('dutyHours', config.dutyHours);
+    if (selectedOffice && officePositions.length > 0) {
+      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      if (officeData) {
+        const positionsForOffice = officeData.positions.map(p => p.position_name);
+        setAvailablePositions(positionsForOffice);
+        
+        // Clear position if it's not available in the selected office
+        if (selectedPosition && !positionsForOffice.includes(selectedPosition)) {
+          setValue('position', '');
+        }
+      } else {
+        // Fallback to all positions if office not found in relationships
+        setAvailablePositions(positions);
+      }
+    } else {
+      setAvailablePositions(positions);
+    }
+  }, [selectedOffice, officePositions, positions, selectedPosition, setValue]);
+
+  // Auto-populate reporting time and duty hours when office and position are selected
+  useEffect(() => {
+    if (!viewOnly && selectedOffice && selectedPosition && officePositions.length > 0) {
+      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      if (officeData) {
+        const positionData = officeData.positions.find(p => p.position_name === selectedPosition);
+        if (positionData) {
+          setValue('reportingTime', positionData.reporting_time);
+          setValue('dutyHours', positionData.duty_hours);
+        }
       }
     }
-  }, [selectedOffice, selectedPosition, setValue, viewOnly]);
+  }, [selectedOffice, selectedPosition, officePositions, setValue, viewOnly]);
 
   const handleFormSubmit = (data: FormData) => {
     if (!viewOnly && onSubmit) {
       onSubmit(data);
       onClose();
     }
+  };
+
+  // Check if reporting time and duty hours should be readonly (when office-position relationship exists)
+  const shouldBeReadonly = (field: 'reportingTime' | 'dutyHours') => {
+    if (viewOnly) return true;
+    
+    if (selectedOffice && selectedPosition && officePositions.length > 0) {
+      const officeData = officePositions.find(op => op.office_name === selectedOffice);
+      if (officeData) {
+        const positionData = officeData.positions.find(p => p.position_name === selectedPosition);
+        return !!positionData; // readonly if relationship exists
+      }
+    }
+    return false;
   };
 
   return (
@@ -165,8 +189,6 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               { label: 'Full Name', name: 'fullName', type: 'text', placeholder: 'John Doe' },
               { label: 'Email', name: 'email', type: 'email', placeholder: 'john@company.com' },
               { label: 'Monthly Salary', name: 'monthlySalary', type: 'number', placeholder: '5000' },
-              { label: 'Duty Hours', name: 'dutyHours', type: 'number', placeholder: '8' },
-              { label: 'Reporting Time', name: 'reportingTime', type: 'time', placeholder: '' },
               { label: 'Allowed Late Days', name: 'allowedLateDays', type: 'number', placeholder: '3' }
             ].map((field, index) => (
               <div key={index}>
@@ -187,6 +209,53 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
                 )}
               </div>
             ))}
+
+            {/* Duty Hours - Auto-populated and conditionally readonly */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Duty Hours
+                {shouldBeReadonly('dutyHours') && (
+                  <span className="text-xs text-blue-600 ml-2">(Auto-set based on office & position)</span>
+                )}
+              </label>
+              <input
+                type="number"
+                {...register('dutyHours', {
+                  required: !viewOnly ? 'Duty Hours is required' : false
+                })}
+                disabled={viewOnly || shouldBeReadonly('dutyHours')}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  viewOnly || shouldBeReadonly('dutyHours') ? 'bg-gray-100' : ''
+                }`}
+                placeholder="8"
+              />
+              {errors.dutyHours && (
+                <p className="mt-1 text-sm text-red-600">{errors.dutyHours.message}</p>
+              )}
+            </div>
+
+            {/* Reporting Time - Auto-populated and conditionally readonly */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reporting Time
+                {shouldBeReadonly('reportingTime') && (
+                  <span className="text-xs text-blue-600 ml-2">(Auto-set based on office & position)</span>
+                )}
+              </label>
+              <input
+                type="time"
+                {...register('reportingTime', {
+                  required: !viewOnly ? 'Reporting Time is required' : false
+                })}
+                disabled={viewOnly || shouldBeReadonly('reportingTime')}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  viewOnly || shouldBeReadonly('reportingTime') ? 'bg-gray-100' : ''
+                }`}
+              />
+              {errors.reportingTime && (
+                <p className="mt-1 text-sm text-red-600">{errors.reportingTime.message}</p>
+              )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Joining Date</label>
@@ -236,11 +305,14 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               >
                 <option value="">Select Position</option>
-                {positions.map((position) => (
+                {availablePositions.map((position) => (
                   <option key={position} value={position}>{position}</option>
                 ))}
               </select>
               {errors.position && <p className="mt-1 text-sm text-red-600">{errors.position.message}</p>}
+              {selectedOffice && availablePositions.length === 0 && (
+                <p className="mt-1 text-sm text-amber-600">No positions available for this office. Please add positions for this office first.</p>
+              )}
             </div>
 
             <div>

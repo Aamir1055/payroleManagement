@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { MetricCard } from '../components/Dashboard/MetricCard';
 import axios from 'axios';
-// Removed EmployeeForm import since it won't be used anymore
 
 export const Dashboard: React.FC = () => {
   // Existing state...
@@ -14,15 +13,18 @@ export const Dashboard: React.FC = () => {
   const [offices, setOffices] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
 
-  // Modal states for add office/position
+  // Enhanced modal states for office with positions
   const [showOfficeModal, setShowOfficeModal] = useState(false);
   const [showPositionModal, setShowPositionModal] = useState(false);
 
-  // Input states for new office/position
+  // Enhanced input states for new office with positions
   const [newOfficeName, setNewOfficeName] = useState('');
   const [newPositionName, setNewPositionName] = useState('');
-
-  // Removed showEmployeeForm and handleEmployeeSubmit since not needed
+  const [officePositions, setOfficePositions] = useState<{
+    positionName: string;
+    reportingTime: string;
+    dutyHours: number;
+  }[]>([]);
 
   // Fetch functions for master data
   const fetchOffices = async () => {
@@ -83,12 +85,25 @@ export const Dashboard: React.FC = () => {
 
   const handleAddOffice = async () => {
     if (!newOfficeName.trim()) return alert('Please enter an office name');
+    if (officePositions.length === 0) return alert('Please add at least one position for this office');
+    
     try {
-      await axios.post('http://localhost:5000/api/masters/offices', { name: newOfficeName });
-      alert('Office added successfully!');
+      // Create office with positions
+      const response = await axios.post('http://localhost:5000/api/masters/offices-with-positions', {
+        officeName: newOfficeName,
+        positions: officePositions
+      });
+      
+      alert('Office and positions added successfully!');
       setNewOfficeName('');
+      setOfficePositions([]);
       setShowOfficeModal(false);
       fetchOffices();
+      fetchPositions();
+      
+      // Refresh office summary to show new office
+      const officeSummaryResponse = await axios.get('http://localhost:5000/api/employees/summary-by-office');
+      setOfficeSummary(officeSummaryResponse.data);
     } catch (error) {
       console.error(error);
       alert('Failed to add office');
@@ -109,26 +124,32 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const addPositionToOffice = () => {
+    setOfficePositions([...officePositions, {
+      positionName: '',
+      reportingTime: '09:00',
+      dutyHours: 8
+    }]);
+  };
+
+  const removePositionFromOffice = (index: number) => {
+    setOfficePositions(officePositions.filter((_, i) => i !== index));
+  };
+
+  const updateOfficePosition = (index: number, field: string, value: string | number) => {
+    const updated = [...officePositions];
+    updated[index] = { ...updated[index], [field]: value };
+    setOfficePositions(updated);
+  };
+
   return (
-    <MainLayout title="Dashboard" subtitle="Overview of your payroll system">
+    <MainLayout 
+      title="Dashboard" 
+      subtitle="Overview of your payroll system"
+      onAddOffice={() => setShowOfficeModal(true)}
+      onAddPosition={() => setShowPositionModal(true)}
+    >
       <div className="space-y-6">
-
-        {/* Buttons for adding Office and Position ONLY */}
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => setShowOfficeModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Add Office
-          </button>
-          <button
-            onClick={() => setShowPositionModal(true)}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Add Position
-          </button>
-        </div>
-
         {/* Existing Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <MetricCard
@@ -166,21 +187,91 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Office Modal */}
+        {/* Enhanced Office Modal with Positions */}
         {showOfficeModal && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
-            <div className="bg-white rounded p-6 w-80">
-              <h2 className="text-xl font-semibold mb-4">Add New Office</h2>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded px-3 py-2 mb-4"
-                placeholder="Office Name"
-                value={newOfficeName}
-                onChange={(e) => setNewOfficeName(e.target.value)}
-              />
+            <div className="bg-white rounded p-6 w-4/5 max-w-4xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-semibold mb-4">Add New Office with Positions</h2>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Office Name</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded px-3 py-2"
+                  placeholder="Office Name (e.g., Dubai Office)"
+                  value={newOfficeName}
+                  onChange={(e) => setNewOfficeName(e.target.value)}
+                />
+              </div>
+
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Positions in this Office</h3>
+                  <button
+                    onClick={addPositionToOffice}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  >
+                    Add Position
+                  </button>
+                </div>
+                
+                {officePositions.map((position, index) => (
+                  <div key={index} className="border rounded p-4 mb-4 bg-gray-50">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                          placeholder="e.g., Data Analyst"
+                          value={position.positionName}
+                          onChange={(e) => updateOfficePosition(index, 'positionName', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Time</label>
+                        <input
+                          type="time"
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                          value={position.reportingTime}
+                          onChange={(e) => updateOfficePosition(index, 'reportingTime', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Duty Hours</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="12"
+                          className="w-full border border-gray-300 rounded px-3 py-2"
+                          value={position.dutyHours}
+                          onChange={(e) => updateOfficePosition(index, 'dutyHours', parseInt(e.target.value))}
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          onClick={() => removePositionFromOffice(index)}
+                          className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {officePositions.length === 0 && (
+                  <p className="text-gray-500 text-center py-8">No positions added yet. Click "Add Position" to get started.</p>
+                )}
+              </div>
+
               <div className="flex justify-end gap-2">
                 <button
-                  onClick={() => setShowOfficeModal(false)}
+                  onClick={() => {
+                    setShowOfficeModal(false);
+                    setNewOfficeName('');
+                    setOfficePositions([]);
+                  }}
                   className="px-4 py-2 border rounded"
                 >
                   Cancel
@@ -189,7 +280,7 @@ export const Dashboard: React.FC = () => {
                   onClick={handleAddOffice}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                 >
-                  Save
+                  Save Office & Positions
                 </button>
               </div>
             </div>
@@ -225,9 +316,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         )}
-
-        {/* Removed EmployeeForm modal */}
-
       </div>
     </MainLayout>
   );
