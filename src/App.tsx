@@ -9,6 +9,7 @@ import { Employees } from './pages/Employees';
 import { Payroll } from './pages/Payroll';
 import { Reports } from './pages/Reports';
 import { Holidays } from './pages/holidays';
+import { Profile } from './pages/Profile';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ 
@@ -105,6 +106,16 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute permission="manage_holidays">
             <Holidays />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Profile - All authenticated users */}
+      <Route 
+        path="/profile" 
+        element={
+          <ProtectedRoute>
+            <Profile />
           </ProtectedRoute>
         } 
       />

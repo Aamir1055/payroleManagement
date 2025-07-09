@@ -3,24 +3,26 @@ import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
-  Upload, 
+  DollarSign, 
   FileText, 
-  Settings,
+  Calendar,
   LogOut,
   Building2,
   Briefcase,
   ChevronDown,
   ChevronRight,
-  Plus
+  Plus,
+  User,
+  Settings
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Manage Employees', href: '/employees', icon: Users },
-  { name: 'Upload Attendance', href: '/attendance', icon: Upload },
-  { name: 'Payroll Reports', href: '/reports', icon: FileText },
-  { name: 'Settings', href: '/settings', icon: Settings },
-  { name: 'Holidays', href: '/holidays', icon: FileText }
+  { name: 'Employees', href: '/employees', icon: Users },
+  { name: 'Payroll', href: '/payroll', icon: DollarSign },
+  { name: 'Reports', href: '/reports', icon: FileText },
+  { name: 'Holidays', href: '/holidays', icon: Calendar },
+  { name: 'Profile', href: '/profile', icon: User }
 ];
 
 interface SidebarProps {
