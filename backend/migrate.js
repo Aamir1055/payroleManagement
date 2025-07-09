@@ -1,211 +1,237 @@
 const mysql = require('mysql2');
-require('dotenv').config();
+const bcrypt = require('bcrypt');
 
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'payroll_db'
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'payroll_system'
 });
 
-const migrations = [
-  // Create Users table for authentication
-  `CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(50) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'floor_manager', 'employee') NOT NULL DEFAULT 'employee',
-    status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    two_factor_enabled BOOLEAN DEFAULT FALSE,
-    two_factor_secret VARCHAR(255) NULL,
-    two_factor_temp_secret VARCHAR(255) NULL,
-    last_login TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`,
-
-  // Create OfficeMaster table
-  `CREATE TABLE IF NOT EXISTS OfficeMaster (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`,
-
-  // Create PositionMaster table
-  `CREATE TABLE IF NOT EXISTS PositionMaster (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`,
-
-  // Create OfficePositions relationship table
-  `CREATE TABLE IF NOT EXISTS OfficePositions (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    office_id INT NOT NULL,
-    position_id INT NOT NULL,
-    reporting_time TIME NOT NULL DEFAULT '09:00:00',
-    duty_hours DECIMAL(3,1) NOT NULL DEFAULT 8.0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (office_id) REFERENCES OfficeMaster(id) ON DELETE CASCADE,
-    FOREIGN KEY (position_id) REFERENCES PositionMaster(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_office_position (office_id, position_id)
-  )`,
-
-  // Create Employees table if not exists
-  `CREATE TABLE IF NOT EXISTS Employees (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    employeeId VARCHAR(50) NOT NULL UNIQUE,
-    fullName VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    office VARCHAR(255) NOT NULL,
-    position VARCHAR(255) NOT NULL,
-    monthlySalary DECIMAL(10,2) NOT NULL,
-    dutyHours INT NOT NULL DEFAULT 8,
-    reportingTime TIME NOT NULL DEFAULT '09:00:00',
-    allowedLateDays INT NOT NULL DEFAULT 3,
-    joiningDate DATE NOT NULL,
-    status ENUM('active', 'inactive') DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`,
-
-  // Create Holidays table
-  `CREATE TABLE IF NOT EXISTS Holidays (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    date DATE NOT NULL UNIQUE,
-    type ENUM('public', 'company', 'religious') DEFAULT 'company',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`
-];
-
-const seedData = [
-  // Insert default admin user
-  `INSERT IGNORE INTO users (username, email, password, role, status) VALUES 
-  ('admin', 'admin@payroll.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj0kEa1EJ5LG', 'admin', 'active')`,
-  // Password is 'admin123' - change this in production!
-
-  // Insert sample offices
-  `INSERT IGNORE INTO OfficeMaster (name) VALUES 
-  ('New York'),
-  ('Los Angeles'),
-  ('Chicago'),
-  ('Houston'),
-  ('Dubai')`,
-
-  // Insert sample positions
-  `INSERT IGNORE INTO PositionMaster (name) VALUES 
-  ('Software Engineer'),
-  ('Data Analyst'),
-  ('Product Manager'),
-  ('Designer'),
-  ('HR Specialist')`,
-
-  // Insert common holidays
-  `INSERT IGNORE INTO Holidays (name, date, type) VALUES 
-  ('New Year Day', '2024-01-01', 'public'),
-  ('Independence Day', '2024-07-04', 'public'),
-  ('Christmas Day', '2024-12-25', 'public'),
-  ('Thanksgiving', '2024-11-28', 'public')`
-];
-
-const relationshipData = [
-  // Insert some sample office-position relationships
-  `INSERT IGNORE INTO OfficePositions (office_id, position_id, reporting_time, duty_hours) VALUES 
-  ((SELECT id FROM OfficeMaster WHERE name = 'New York'), (SELECT id FROM PositionMaster WHERE name = 'Software Engineer'), '09:00:00', 8.0),
-  ((SELECT id FROM OfficeMaster WHERE name = 'New York'), (SELECT id FROM PositionMaster WHERE name = 'Data Analyst'), '09:00:00', 8.0),
-  ((SELECT id FROM OfficeMaster WHERE name = 'New York'), (SELECT id FROM PositionMaster WHERE name = 'Product Manager'), '10:00:00', 7.0),
-  ((SELECT id FROM OfficeMaster WHERE name = 'Dubai'), (SELECT id FROM PositionMaster WHERE name = 'Data Analyst'), '08:30:00', 8.5),
-  ((SELECT id FROM OfficeMaster WHERE name = 'Dubai'), (SELECT id FROM PositionMaster WHERE name = 'Software Engineer'), '09:00:00', 8.0),
-  ((SELECT id FROM OfficeMaster WHERE name = 'Dubai'), (SELECT id FROM PositionMaster WHERE name = 'HR Specialist'), '09:00:00', 8.0)`
-];
-
-async function runMigration() {
-  console.log('Starting database migration...');
-
+const runMigration = async () => {
   try {
-    // Connect to database
-    await new Promise((resolve, reject) => {
-      db.connect((err) => {
-        if (err) {
-          console.error('Database connection failed:', err);
-          reject(err);
-        } else {
-          console.log('Connected to MySQL database');
-          resolve();
-        }
-      });
-    });
+    console.log('🚀 Starting database migration...');
 
-    // Run migrations
-    console.log('Creating tables...');
-    for (const migration of migrations) {
-      await new Promise((resolve, reject) => {
-        db.query(migration, (err, result) => {
-          if (err) {
-            console.error('Migration error:', err);
-            reject(err);
-          } else {
-            resolve(result);
-          }
-        });
-      });
-    }
+    // Create Users table with HR role
+    const createUsersTable = `
+      CREATE TABLE IF NOT EXISTS Users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'hr', 'floor_manager', 'employee') NOT NULL,
+        employee_id VARCHAR(10),
+        two_factor_secret VARCHAR(32),
+        two_factor_enabled BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `;
 
-    // Seed initial data
-    console.log('Seeding initial data...');
-    for (const seed of seedData) {
-      await new Promise((resolve, reject) => {
-        db.query(seed, (err, result) => {
-          if (err) {
-            console.error('Seed error:', err);
-            reject(err);
-          } else {
-            resolve(result);
-          }
-        });
-      });
-    }
+    await queryPromise(createUsersTable);
+    console.log('✅ Users table created/updated');
 
-    // Add relationship data
-    console.log('Creating office-position relationships...');
-    for (const relationship of relationshipData) {
-      await new Promise((resolve, reject) => {
-        db.query(relationship, (err, result) => {
-          if (err) {
-            console.error('Relationship error:', err);
-            reject(err);
-          } else {
-            resolve(result);
-          }
-        });
-      });
-    }
-
-    console.log('Migration completed successfully!');
-    console.log('');
-    console.log('Default admin credentials:');
-    console.log('Username: admin');
-    console.log('Email: admin@payroll.com');
-    console.log('Password: admin123');
-    console.log('');
-    console.log('Please change the admin password after first login!');
+    // Create default users with hashed passwords
+    const saltRounds = 10;
     
+    // Hash passwords for all users
+    const adminPassword = await bcrypt.hash('admin123', saltRounds);
+    const hrPassword = await bcrypt.hash('hr123', saltRounds);
+    const floorManagerPassword = await bcrypt.hash('manager123', saltRounds);
+
+    // Insert default users (ignore if they already exist)
+    const insertUsers = `
+      INSERT IGNORE INTO Users (username, password, role, employee_id) VALUES
+      ('admin', ?, 'admin', NULL),
+      ('hr', ?, 'hr', 'EMP001'),
+      ('floormanager', ?, 'floor_manager', 'EMP002')
+    `;
+
+    await queryPromise(insertUsers, [adminPassword, hrPassword, floorManagerPassword]);
+    console.log('✅ Default users created');
+
+    // Rest of the existing migration...
+    
+    // Create Offices table
+    const createOfficesTable = `
+      CREATE TABLE IF NOT EXISTS Offices (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        location VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `;
+
+    await queryPromise(createOfficesTable);
+    console.log('✅ Offices table created');
+
+    // Create Positions table
+    const createPositionsTable = `
+      CREATE TABLE IF NOT EXISTS Positions (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `;
+
+    await queryPromise(createPositionsTable);
+    console.log('✅ Positions table created');
+
+    // Create OfficePositions relationship table
+    const createOfficePositionsTable = `
+      CREATE TABLE IF NOT EXISTS OfficePositions (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        office_id INT NOT NULL,
+        position_id INT NOT NULL,
+        reporting_time TIME,
+        duty_hours DECIMAL(4,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (office_id) REFERENCES Offices(id) ON DELETE CASCADE,
+        FOREIGN KEY (position_id) REFERENCES Positions(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_office_position (office_id, position_id)
+      )
+    `;
+
+    await queryPromise(createOfficePositionsTable);
+    console.log('✅ OfficePositions table created');
+
+    // Create Employees table
+    const createEmployeesTable = `
+      CREATE TABLE IF NOT EXISTS Employees (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        employee_id VARCHAR(10) UNIQUE NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        phone VARCHAR(20),
+        office_id INT,
+        position_id INT,
+        salary DECIMAL(10,2) NOT NULL,
+        hire_date DATE NOT NULL,
+        status TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (office_id) REFERENCES Offices(id),
+        FOREIGN KEY (position_id) REFERENCES Positions(id)
+      )
+    `;
+
+    await queryPromise(createEmployeesTable);
+    console.log('✅ Employees table created');
+
+    // Create Holidays table
+    const createHolidaysTable = `
+      CREATE TABLE IF NOT EXISTS Holidays (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(100) NOT NULL,
+        date DATE NOT NULL UNIQUE,
+        type ENUM('public', 'company', 'religious') DEFAULT 'company',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `;
+
+    await queryPromise(createHolidaysTable);
+    console.log('✅ Holidays table created');
+
+    // Create Payroll table
+    const createPayrollTable = `
+      CREATE TABLE IF NOT EXISTS Payroll (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        employee_id VARCHAR(10) NOT NULL,
+        month INT NOT NULL,
+        year INT NOT NULL,
+        present_days INT DEFAULT 0,
+        half_days INT DEFAULT 0,
+        late_days INT DEFAULT 0,
+        leaves INT DEFAULT 0,
+        overtime_hours DECIMAL(4,2) DEFAULT 0,
+        deductions DECIMAL(10,2) DEFAULT 0,
+        allowances DECIMAL(10,2) DEFAULT 0,
+        gross_salary DECIMAL(10,2) DEFAULT 0,
+        net_salary DECIMAL(10,2) DEFAULT 0,
+        status ENUM('calculated', 'paid', 'pending') DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_employee_month_year (employee_id, month, year),
+        FOREIGN KEY (employee_id) REFERENCES Employees(employee_id) ON DELETE CASCADE
+      )
+    `;
+
+    await queryPromise(createPayrollTable);
+    console.log('✅ Payroll table created');
+
+    // Insert sample data
+    await insertSampleData();
+
+    console.log('\n🎉 Migration completed successfully!');
+    console.log('\n👥 User Accounts Created:');
+    console.log('┌─────────────┬─────────────┬──────────────┬─────────────┐');
+    console.log('│ Username    │ Password    │ Role         │ Employee ID │');
+    console.log('├─────────────┼─────────────┼──────────────┼─────────────┤');
+    console.log('│ admin       │ admin123    │ Admin        │ -           │');
+    console.log('│ hr          │ hr123       │ HR           │ EMP001      │');
+    console.log('│ floormanager│ manager123  │ Floor Mgr    │ EMP002      │');
+    console.log('└─────────────┴─────────────┴──────────────┴─────────────┘');
+    console.log('\n🔐 All accounts have 2FA disabled by default');
+    console.log('🚀 Ready to start the application!');
+
   } catch (error) {
-    console.error('Migration failed:', error);
-    process.exit(1);
+    console.error('❌ Migration failed:', error);
   } finally {
     db.end();
   }
-}
+};
 
-if (require.main === module) {
-  runMigration();
-}
+const insertSampleData = async () => {
+  try {
+    // Insert sample offices
+    const insertOffices = `
+      INSERT IGNORE INTO Offices (name, location) VALUES
+      ('Head Office', 'Dubai, UAE'),
+      ('Branch Office', 'Abu Dhabi, UAE'),
+      ('Regional Office', 'Sharjah, UAE')
+    `;
+    await queryPromise(insertOffices);
 
-module.exports = { runMigration };
+    // Insert sample positions
+    const insertPositions = `
+      INSERT IGNORE INTO Positions (title, description) VALUES
+      ('Software Developer', 'Develops and maintains software applications'),
+      ('HR Manager', 'Manages human resources and employee relations'),
+      ('Floor Manager', 'Supervises floor operations and staff'),
+      ('Accountant', 'Handles financial records and transactions'),
+      ('Sales Representative', 'Manages client relationships and sales')
+    `;
+    await queryPromise(insertPositions);
+
+    // Insert sample holidays
+    const insertHolidays = `
+      INSERT IGNORE INTO Holidays (name, date, type) VALUES
+      ('New Year Day', '2025-01-01', 'public'),
+      ('UAE National Day', '2025-12-02', 'public'),
+      ('Eid Al-Fitr', '2025-04-10', 'religious'),
+      ('Eid Al-Adha', '2025-06-16', 'religious'),
+      ('Company Foundation Day', '2025-03-15', 'company')
+    `;
+    await queryPromise(insertHolidays);
+
+    console.log('✅ Sample data inserted');
+  } catch (error) {
+    console.error('⚠️ Sample data insertion failed:', error);
+  }
+};
+
+// Helper function to promisify database queries
+const queryPromise = (sql, params = []) => {
+  return new Promise((resolve, reject) => {
+    db.query(sql, params, (err, results) => {
+      if (err) reject(err);
+      else resolve(results);
+    });
+  });
+};
+
+// Run migration
+runMigration();

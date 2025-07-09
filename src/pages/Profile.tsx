@@ -54,12 +54,14 @@ export const Profile: React.FC = () => {
   const getRoleBadge = (role: string) => {
     const styles = {
       admin: 'bg-purple-100 text-purple-800',
-      floor_manager: 'bg-blue-100 text-blue-800',
-      employee: 'bg-green-100 text-green-800'
+      hr: 'bg-blue-100 text-blue-800',
+      floor_manager: 'bg-green-100 text-green-800',
+      employee: 'bg-gray-100 text-gray-800'
     };
 
     const labels = {
       admin: 'Administrator',
+      hr: 'Human Resources',
       floor_manager: 'Floor Manager',
       employee: 'Employee'
     };
@@ -223,6 +225,35 @@ export const Profile: React.FC = () => {
                   <div className="flex items-center text-green-600">
                     <Check className="w-4 h-4 mr-2" />
                     <span className="text-sm">Holiday Management</span>
+                  </div>
+                </>
+              )}
+              
+              {user?.role === 'hr' && (
+                <>
+                  <div className="flex items-center text-green-600">
+                    <Check className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Employee Management</span>
+                  </div>
+                  <div className="flex items-center text-green-600">
+                    <Check className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Payroll Management</span>
+                  </div>
+                  <div className="flex items-center text-green-600">
+                    <Check className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Reports Access</span>
+                  </div>
+                  <div className="flex items-center text-green-600">
+                    <Check className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Holiday Management</span>
+                  </div>
+                  <div className="flex items-center text-gray-400">
+                    <X className="w-4 h-4 mr-2" />
+                    <span className="text-sm">Master Data Management</span>
+                  </div>
+                  <div className="flex items-center text-gray-400">
+                    <X className="w-4 h-4 mr-2" />
+                    <span className="text-sm">User Management</span>
                   </div>
                 </>
               )}

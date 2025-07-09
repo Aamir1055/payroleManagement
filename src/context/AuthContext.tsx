@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 export interface User {
   id: number;
   username: string;
-  role: 'admin' | 'floor_manager' | 'employee';
+  role: 'admin' | 'hr' | 'floor_manager' | 'employee';
   employeeId?: string;
   twoFactorEnabled: boolean;
 }
@@ -107,7 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
 
-    const permissions = {
+    const permissions: Record<User['role'], string[]> = {
       admin: [
         'view_dashboard',
         'manage_employees', 
@@ -116,7 +116,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         'manage_positions',
         'manage_holidays',
         'view_reports',
-        'manage_users'
+        'manage_users',
+        'system_admin'
+      ],
+      hr: [
+        'view_dashboard',
+        'manage_employees',
+        'manage_payroll', 
+        'view_reports',
+        'manage_holidays',
+        'hr_operations'
       ],
       floor_manager: [
         'view_dashboard',
@@ -129,7 +138,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       ]
     };
 
-    return permissions[user.role]?.includes(permission) || false;
+    const userRole = user.role as User['role'];
+    return permissions[userRole]?.includes(permission) || false;
   };
 
   const value: AuthContextType = {
