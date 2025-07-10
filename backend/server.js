@@ -4,7 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 // Import middleware
-const { requireAuth, requireAdmin, requireManager } = require('./middleware/auth');
+const { verifyToken, requireAdmin, requireHR, requireManager } = require('./middleware/auth');
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -23,7 +23,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '2.0.0'
   });
 });
 
@@ -31,11 +31,11 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 
 // Protected routes with role-based access
-app.use('/api/employees', requireAuth, employeeRoutes);
-app.use('/api/attendance', requireAuth, attendanceRoutes);
-app.use('/api/payroll', requireManager, payrollRoutes); // Only admin and floor_manager
-app.use('/api/holidays', requireManager, holidaysRoutes); // Only admin and floor_manager
-app.use('/api/masters', requireAdmin, masterRoutes); // Only admin
+app.use('/api/employees', verifyToken, employeeRoutes);
+app.use('/api/attendance', verifyToken, attendanceRoutes);
+app.use('/api/payroll', requireManager, payrollRoutes); // Admin, HR, and Floor Manager
+app.use('/api/holidays', requireHR, holidaysRoutes); // Admin and HR only
+app.use('/api/masters', requireAdmin, masterRoutes); // Admin only
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -69,17 +69,24 @@ app.use('*', (req, res) => {
 // Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  console.log('\n👥 User Accounts Available:');
+  console.log('🔐 Admin: admin / admin123');
+  console.log('🏢 HR: hr / hr123');
+  console.log('👨‍💼 Floor Manager: floormanager / manager123');
   
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n🔐 API Endpoints:');
-    console.log('📍 Health Check: GET /api/health');
-    console.log('🔑 Authentication: POST /api/auth/login');
-    console.log('👤 Registration: POST /api/auth/register');
-    console.log('👥 Employees: GET /api/employees (requires auth)');
-    console.log('🏢 Masters: GET /api/masters/* (requires admin)');
-    console.log('💰 Payroll: GET /api/payroll/* (requires manager+)');
-    console.log('\n🚀 Run migration: npm run migrate');
+    console.log('\n� API Endpoints:');
+    console.log('🏥 Health Check: GET /api/health');
+    console.log('🔑 Login: POST /api/auth/login');
+    console.log('👤 Profile: GET /api/auth/profile');
+    console.log('🔐 2FA Setup: GET /api/auth/2fa/setup');
+    console.log('👥 Employees: /api/employees/* (auth required)');
+    console.log('💰 Payroll: /api/payroll/* (manager+ required)');
+    console.log('🏢 Masters: /api/masters/* (admin required)');
+    console.log('� Holidays: /api/holidays/* (hr+ required)');
+    console.log('\n� Setup: node migrate.js');
   }
 });

@@ -263,7 +263,7 @@ exports.register = async (req, res) => {
     return res.status(400).json({ error: 'Username, password, and role are required' });
   }
 
-  if (!['admin', 'floor_manager', 'employee'].includes(role)) {
+  if (!['admin', 'hr', 'floor_manager', 'employee'].includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
 

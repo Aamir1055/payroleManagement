@@ -1,10 +1,10 @@
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 // ✅ Verify JWT Token
-const authenticateToken = (req, res, next) => {
+const verifyToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
@@ -21,7 +21,7 @@ const authenticateToken = (req, res, next) => {
     }
 
     // Verify user still exists and is active
-    db.query('SELECT id, status FROM users WHERE id = ?', [user.userId], (dbErr, results) => {
+    db.query('SELECT id, username, role FROM Users WHERE id = ?', [user.userId], (dbErr, results) => {
       if (dbErr) {
         return res.status(500).json({ error: 'Database error' });
       }
@@ -30,11 +30,12 @@ const authenticateToken = (req, res, next) => {
         return res.status(401).json({ error: 'User not found' });
       }
 
-      if (results[0].status === 'inactive') {
-        return res.status(401).json({ error: 'Account inactive' });
-      }
-
-      req.user = user;
+      // Add user info to request
+      req.user = {
+        userId: user.userId,
+        username: user.username,
+        role: user.role
+      };
       next();
     });
   });
@@ -67,11 +68,14 @@ const requireRole = (allowedRoles) => {
 // ✅ Admin only access
 const requireAdmin = requireRole(['admin']);
 
-// ✅ Admin or Floor Manager access
-const requireManager = requireRole(['admin', 'floor_manager']);
+// ✅ Admin or HR access
+const requireHR = requireRole(['admin', 'hr']);
+
+// ✅ Admin, HR, or Floor Manager access
+const requireManager = requireRole(['admin', 'hr', 'floor_manager']);
 
 // ✅ All authenticated users
-const requireAuth = authenticateToken;
+const requireAuth = verifyToken;
 
 // ✅ Optional authentication (for public endpoints that can benefit from user context)
 const optionalAuth = (req, res, next) => {
@@ -91,9 +95,10 @@ const optionalAuth = (req, res, next) => {
 };
 
 module.exports = {
-  authenticateToken,
+  verifyToken,
   requireRole,
   requireAdmin,
+  requireHR,
   requireManager,
   requireAuth,
   optionalAuth
