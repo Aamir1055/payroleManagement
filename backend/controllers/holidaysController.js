@@ -81,18 +81,12 @@ exports.getWorkingDays = (req, res) => {
   }
 };
 
-// ✅ Add new holiday
+// ✅ Add new holiday with reason field
 exports.addHoliday = (req, res) => {
-  const { name, date, type = 'company' } = req.body;
+  const { name, date, reason } = req.body;
 
-  if (!name || !date) {
-    return res.status(400).json({ error: 'Name and date are required' });
-  }
-
-  // Validate type
-  const validTypes = ['public', 'company', 'religious'];
-  if (!validTypes.includes(type)) {
-    return res.status(400).json({ error: 'Invalid holiday type' });
+  if (!name || !date || !reason) {
+    return res.status(400).json({ error: 'Name, date, and reason are required' });
   }
 
   // Validate date format
@@ -102,8 +96,8 @@ exports.addHoliday = (req, res) => {
   }
 
   db.query(
-    'INSERT INTO Holidays (name, date, type) VALUES (?, ?, ?)',
-    [name, date, type],
+    'INSERT INTO Holidays (name, date, reason) VALUES (?, ?, ?)',
+    [name, date, reason],
     (err, result) => {
       if (err) {
         if (err.code === 'ER_DUP_ENTRY') {
@@ -116,28 +110,20 @@ exports.addHoliday = (req, res) => {
         id: result.insertId,
         name,
         date,
-        type,
+        reason,
         message: 'Holiday added successfully'
       });
     }
   );
 };
 
-// ✅ Update holiday
+// ✅ Update holiday with reason field
 exports.updateHoliday = (req, res) => {
   const { id } = req.params;
-  const { name, date, type } = req.body;
+  const { name, date, reason } = req.body;
 
-  if (!name && !date && !type) {
+  if (!name && !date && !reason) {
     return res.status(400).json({ error: 'At least one field is required for update' });
-  }
-
-  // Validate type if provided
-  if (type) {
-    const validTypes = ['public', 'company', 'religious'];
-    if (!validTypes.includes(type)) {
-      return res.status(400).json({ error: 'Invalid holiday type' });
-    }
   }
 
   // Validate date format if provided
@@ -160,9 +146,9 @@ exports.updateHoliday = (req, res) => {
     updates.push('date = ?');
     values.push(date);
   }
-  if (type) {
-    updates.push('type = ?');
-    values.push(type);
+  if (reason) {
+    updates.push('reason = ?');
+    values.push(reason);
   }
   
   updates.push('updated_at = NOW()');

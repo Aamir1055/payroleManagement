@@ -12,12 +12,19 @@ interface AttendanceRecord {
   date: string;
 }
 
+interface PreviewData {
+  headers: string[];
+  rows: any[][];
+  fileName: string;
+}
+
 export const Payroll: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [payrollData, setPayrollData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
 
   // Generate payroll report
   const generatePayrollReport = async () => {
@@ -72,29 +79,61 @@ export const Payroll: React.FC = () => {
     saveAs(blob, 'attendance_template.xlsx');
   };
 
-  // Upload attendance Excel file
+  // Upload attendance Excel file with preview
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadStatus('Processing...');
+    setUploadStatus('Reading file...');
     
     try {
       // Read Excel file
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
-      // Validate and process data
+      if (jsonData.length < 2) {
+        throw new Error('File must contain headers and at least one data row');
+      }
+
+      // Extract headers and data rows
+      const headers = jsonData[0];
+      const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== undefined && cell !== ''));
+
+      // Generate preview
+      setPreviewData({
+        headers,
+        rows: rows.slice(0, 10), // Show first 10 rows
+        fileName: file.name
+      });
+
+      setUploadStatus('File loaded. Review the preview below and click "Upload Data" to process.');
+      
+    } catch (error: any) {
+      console.error('File reading error:', error);
+      setUploadStatus(`Error: ${error.message || 'Failed to read file'}`);
+      setTimeout(() => setUploadStatus(''), 5000);
+    }
+  };
+
+  // Process and upload the previewed data
+  const processUpload = async () => {
+    if (!previewData) return;
+
+    setUploadStatus('Processing...');
+    
+    try {
+      // Convert preview data to attendance records
       const attendanceRecords: AttendanceRecord[] = [];
-      for (const row of jsonData) {
-        if (row.EmployeeID && row.PunchInTime && row.PunchOutTime && row.Date) {
+      
+      for (const row of previewData.rows) {
+        if (row[0] && row[1] && row[2] && row[3]) { // EmployeeID, PunchInTime, PunchOutTime, Date
           attendanceRecords.push({
-            employeeId: row.EmployeeID,
-            punchInTime: row.PunchInTime,
-            punchOutTime: row.PunchOutTime,
-            date: row.Date
+            employeeId: row[0],
+            punchInTime: row[1],
+            punchOutTime: row[2],
+            date: row[3]
           });
         }
       }
@@ -109,6 +148,7 @@ export const Payroll: React.FC = () => {
       });
 
       setUploadStatus(`Success! Uploaded ${attendanceRecords.length} attendance records.`);
+      setPreviewData(null);
       setTimeout(() => setUploadStatus(''), 3000);
       
     } catch (error: any) {
@@ -116,9 +156,6 @@ export const Payroll: React.FC = () => {
       setUploadStatus(`Error: ${error.message || 'Failed to upload attendance data'}`);
       setTimeout(() => setUploadStatus(''), 5000);
     }
-
-    // Reset file input
-    e.target.value = '';
   };
 
   // Export payroll to Excel
@@ -246,11 +283,23 @@ export const Payroll: React.FC = () => {
                   <div className={`p-3 rounded-lg flex items-center ${
                     uploadStatus.includes('Success') 
                       ? 'bg-green-50 text-green-700' 
+                      : uploadStatus.includes('File loaded')
+                      ? 'bg-blue-50 text-blue-700'
                       : 'bg-red-50 text-red-700'
                   }`}>
                     <AlertCircle className="w-4 h-4 mr-2" />
                     {uploadStatus}
                   </div>
+                )}
+                
+                {previewData && (
+                  <button
+                    onClick={processUpload}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center"
+                  >
+                    <Upload className="w-5 h-5 mr-2" />
+                    Upload Data ({previewData.rows.length} records)
+                  </button>
                 )}
               </div>
             </div>
@@ -279,6 +328,54 @@ export const Payroll: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* File Preview */}
+        {previewData && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <FileSpreadsheet className="w-5 h-5 mr-2 text-green-600" />
+                File Preview: {previewData.fileName}
+              </h2>
+              <div className="text-sm text-gray-500">
+                Showing {previewData.rows.length} of {previewData.rows.length} rows
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {previewData.headers.map((header, index) => (
+                      <th key={index} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {previewData.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex} className="hover:bg-gray-50">
+                      {row.map((cell, cellIndex) => (
+                        <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {cell || '-'}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {previewData.rows.length >= 10 && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  📋 Preview shows first 10 rows. All {previewData.rows.length} rows will be processed when you upload.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Payroll Results */}
         {payrollData.length > 0 && (

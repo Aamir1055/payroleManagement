@@ -13,21 +13,23 @@ export const Dashboard: React.FC = () => {
   const [offices, setOffices] = useState<string[]>([]);
   const [positions, setPositions] = useState<string[]>([]);
 
-  // Enhanced modal states for office with positions
+  // Enhanced modal states for master management
   const [showOfficeModal, setShowOfficeModal] = useState(false);
   const [showPositionModal, setShowPositionModal] = useState(false);
 
-  // Enhanced input states for new office with positions
+  // Office Master state
   const [newOfficeName, setNewOfficeName] = useState('');
-  const [newPositionName, setNewPositionName] = useState('');
-  const [selectedOfficeForPosition, setSelectedOfficeForPosition] = useState('');
-  const [positionReportingTime, setPositionReportingTime] = useState('09:00');
-  const [positionDutyHours, setPositionDutyHours] = useState(8);
   const [officePositions, setOfficePositions] = useState<{
     positionName: string;
     reportingTime: string;
     dutyHours: number;
   }[]>([]);
+
+  // Position Master state
+  const [selectedOfficeForPosition, setSelectedOfficeForPosition] = useState('');
+  const [newPositionName, setNewPositionName] = useState('');
+  const [positionReportingTime, setPositionReportingTime] = useState('09:00');
+  const [positionDutyHours, setPositionDutyHours] = useState(8);
 
   // Fetch functions for master data
   const fetchOffices = async () => {
@@ -85,24 +87,52 @@ export const Dashboard: React.FC = () => {
     fetchPositions();
   }, []);
 
+  // Office Master Functions
+  const handleAddOfficePosition = () => {
+    setOfficePositions([...officePositions, {
+      positionName: '',
+      reportingTime: '09:00',
+      dutyHours: 8
+    }]);
+  };
+
+  const removeOfficePosition = (index: number) => {
+    setOfficePositions(officePositions.filter((_, i) => i !== index));
+  };
+
+  const updateOfficePosition = (index: number, field: string, value: string | number) => {
+    const updated = [...officePositions];
+    updated[index] = { ...updated[index], [field]: value };
+    setOfficePositions(updated);
+  };
+
   const handleAddOffice = async () => {
     if (!newOfficeName.trim()) {
       alert('Please enter an office name');
       return;
     }
-    if (officePositions.length === 0) {
-      alert('Please add at least one position for this office');
-      return;
-    }
     
     try {
-      // Create office with positions
-      await axios.post('http://localhost:5000/api/masters/offices-with-positions', {
-        officeName: newOfficeName,
-        positions: officePositions
+      // Create office first
+      await axios.post('http://localhost:5000/api/masters/offices', {
+        name: newOfficeName
       });
       
-      alert('Office and positions added successfully!');
+      // If positions are provided, add them too
+      if (officePositions.length > 0) {
+        for (const position of officePositions) {
+          if (position.positionName.trim()) {
+            await axios.post('http://localhost:5000/api/masters/office-specific-position', {
+              officeName: newOfficeName,
+              positionName: position.positionName,
+              reportingTime: position.reportingTime,
+              dutyHours: position.dutyHours
+            });
+          }
+        }
+      }
+      
+      alert('Office added successfully!');
       setNewOfficeName('');
       setOfficePositions([]);
       setShowOfficeModal(false);
@@ -120,7 +150,8 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleAddPosition = async () => {
+  // Position Master Functions
+  const handleAddPositionToOffice = async () => {
     if (!newPositionName.trim()) {
       alert('Please enter a position name');
       return;
@@ -131,7 +162,6 @@ export const Dashboard: React.FC = () => {
     }
     
     try {
-      // Create position for specific office
       await axios.post('http://localhost:5000/api/masters/office-specific-position', {
         officeName: selectedOfficeForPosition,
         positionName: newPositionName,
@@ -156,24 +186,6 @@ export const Dashboard: React.FC = () => {
       console.error(error);
       alert('Failed to add position');
     }
-  };
-
-  const addPositionToOffice = () => {
-    setOfficePositions([...officePositions, {
-      positionName: '',
-      reportingTime: '09:00',
-      dutyHours: 8
-    }]);
-  };
-
-  const removePositionFromOffice = (index: number) => {
-    setOfficePositions(officePositions.filter((_, i) => i !== index));
-  };
-
-  const updateOfficePosition = (index: number, field: string, value: string | number) => {
-    const updated = [...officePositions];
-    updated[index] = { ...updated[index], [field]: value };
-    setOfficePositions(updated);
   };
 
   return (
@@ -234,117 +246,132 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Enhanced Office Modal with Positions */}
+        {/* Office Master Modal */}
         {showOfficeModal && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
-            <div className="bg-white rounded p-6 w-4/5 max-w-4xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-semibold mb-4">Add New Office with Positions</h2>
-              
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Office Name</label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded px-3 py-2"
-                  placeholder="Office Name (e.g., Dubai Office)"
-                  value={newOfficeName}
-                  onChange={(e) => setNewOfficeName(e.target.value)}
-                />
+            <div className="bg-white rounded-lg shadow-xl w-4/5 max-w-4xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Office Master</h2>
+                <p className="text-sm text-gray-600 mt-1">Add a new office and optionally define positions for it</p>
               </div>
-
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Positions in this Office</h3>
-                  <button
-                    onClick={addPositionToOffice}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                  >
-                    Add Position
-                  </button>
+              
+              <div className="p-6 space-y-6">
+                {/* Office Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Office Name *</label>
+                  <input
+                    type="text"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Dubai Office, New York Branch"
+                    value={newOfficeName}
+                    onChange={(e) => setNewOfficeName(e.target.value)}
+                  />
                 </div>
-                
-                {officePositions.map((position, index) => (
-                  <div key={index} className="border rounded p-4 mb-4 bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
-                        <input
-                          type="text"
-                          className="w-full border border-gray-300 rounded px-3 py-2"
-                          placeholder="e.g., Data Analyst"
-                          value={position.positionName}
-                          onChange={(e) => updateOfficePosition(index, 'positionName', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Time</label>
-                        <input
-                          type="time"
-                          className="w-full border border-gray-300 rounded px-3 py-2"
-                          value={position.reportingTime}
-                          onChange={(e) => updateOfficePosition(index, 'reportingTime', e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Duty Hours</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="12"
-                          className="w-full border border-gray-300 rounded px-3 py-2"
-                          value={position.dutyHours}
-                          onChange={(e) => updateOfficePosition(index, 'dutyHours', parseInt(e.target.value))}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <button
-                          onClick={() => removePositionFromOffice(index)}
-                          className="w-full px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                        >
-                          Remove
-                        </button>
+
+                {/* Optional Positions */}
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">Positions for this Office</h3>
+                      <p className="text-sm text-gray-600">Optional: Define positions with specific timings for this office</p>
+                    </div>
+                    <button
+                      onClick={handleAddOfficePosition}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                    >
+                      Add Position
+                    </button>
+                  </div>
+                  
+                  {officePositions.map((position, index) => (
+                    <div key={index} className="border rounded-lg p-4 mb-4 bg-gray-50">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Position Name</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            placeholder="e.g., Manager, Analyst"
+                            value={position.positionName}
+                            onChange={(e) => updateOfficePosition(index, 'positionName', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Time</label>
+                          <input
+                            type="time"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            value={position.reportingTime}
+                            onChange={(e) => updateOfficePosition(index, 'reportingTime', e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Duty Hours</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="12"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                            value={position.dutyHours}
+                            onChange={(e) => updateOfficePosition(index, 'dutyHours', parseInt(e.target.value))}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <button
+                            onClick={() => removeOfficePosition(index)}
+                            className="w-full px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                
-                {officePositions.length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No positions added yet. Click "Add Position" to get started.</p>
-                )}
+                  ))}
+                  
+                  {officePositions.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>No positions defined yet. You can add positions later if needed.</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setShowOfficeModal(false);
                     setNewOfficeName('');
                     setOfficePositions([]);
                   }}
-                  className="px-4 py-2 border rounded"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleAddOffice}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg"
                 >
-                  Save Office & Positions
+                  Create Office
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Enhanced Position Modal - Office-Specific */}
+        {/* Position Master Modal */}
         {showPositionModal && (
           <div className="fixed inset-0 bg-black bg-opacity-30 flex justify-center items-center z-50">
-            <div className="bg-white rounded p-6 w-96">
-              <h2 className="text-xl font-semibold mb-4">Add Position to Office</h2>
+            <div className="bg-white rounded-lg shadow-xl w-96">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Position Master</h2>
+                <p className="text-sm text-gray-600 mt-1">Add a position to a specific office</p>
+              </div>
               
-              <div className="space-y-4">
+              <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Office</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Office *</label>
                   <select
-                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     value={selectedOfficeForPosition}
                     onChange={(e) => setSelectedOfficeForPosition(e.target.value)}
                   >
@@ -356,11 +383,11 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Position Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Position Name *</label>
                   <input
                     type="text"
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                    placeholder="Position Name"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Senior Developer, HR Manager"
                     value={newPositionName}
                     onChange={(e) => setNewPositionName(e.target.value)}
                   />
@@ -370,7 +397,7 @@ export const Dashboard: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Reporting Time</label>
                   <input
                     type="time"
-                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     value={positionReportingTime}
                     onChange={(e) => setPositionReportingTime(e.target.value)}
                   />
@@ -382,14 +409,14 @@ export const Dashboard: React.FC = () => {
                     type="number"
                     min="1"
                     max="12"
-                    className="w-full border border-gray-300 rounded px-3 py-2"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
                     value={positionDutyHours}
                     onChange={(e) => setPositionDutyHours(parseInt(e.target.value))}
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-6">
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
                 <button
                   onClick={() => {
                     setShowPositionModal(false);
@@ -398,13 +425,13 @@ export const Dashboard: React.FC = () => {
                     setPositionReportingTime('09:00');
                     setPositionDutyHours(8);
                   }}
-                  className="px-4 py-2 border rounded"
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleAddPosition}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  onClick={handleAddPositionToOffice}
+                  className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg"
                 >
                   Add Position
                 </button>
