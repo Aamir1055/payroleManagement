@@ -3,7 +3,7 @@ import { MainLayout } from '../components/Layout/MainLayout';
 import { Upload, Download, FileSpreadsheet, Users, Calendar, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import axios from 'axios';
+import api from '../utils/axiosConfig';
 
 interface AttendanceRecord {
   employeeId: string;
@@ -30,7 +30,7 @@ export const Payroll: React.FC = () => {
   const generatePayrollReport = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/payroll/report`, {
+      const response = await api.get(`/payroll/report`, {
         params: { month: selectedMonth, year: selectedYear }
       });
       setPayrollData(response.data);
@@ -143,7 +143,7 @@ export const Payroll: React.FC = () => {
       }
 
       // Upload to backend
-      const response = await axios.post('http://localhost:5000/api/attendance/upload', {
+      const response = await api.post('/attendance/upload', {
         attendanceData: attendanceRecords
       });
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/axiosConfig';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { EmployeeTable } from '../components/Employees/EmployeeTable';
 import { EmployeeForm } from '../components/Employees/EmployeeForm';
@@ -36,8 +36,8 @@ export const Employees: React.FC = () => {
     const fetchMasterData = async () => {
       try {
         const [officesRes, positionsRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/masters/offices'),
-          axios.get('http://localhost:5000/api/masters/positions'),
+          api.get('/masters/offices'),
+          api.get('/masters/positions'),
         ]);
         setMasterOffices(officesRes.data.map((o: any) => o.name || o));
         setMasterPositions(positionsRes.data.map((p: any) => p.name || p));

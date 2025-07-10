@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { MetricCard } from '../components/Dashboard/MetricCard';
-import axios from 'axios';
+import api from '../utils/axiosConfig';
 
 export const Dashboard: React.FC = () => {
   // Existing state...
@@ -34,7 +34,7 @@ export const Dashboard: React.FC = () => {
   // Fetch functions for master data
   const fetchOffices = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/masters/offices');
+      const response = await api.get('/masters/offices');
       const officeNames = response.data.map((office: any) => (typeof office === 'string' ? office : office.name));
       setOffices(officeNames);
     } catch (error) {
@@ -44,7 +44,7 @@ export const Dashboard: React.FC = () => {
 
   const fetchPositions = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/masters/positions');
+      const response = await api.get('/masters/positions');
       const positionNames = response.data.map((pos: any) => (typeof pos === 'string' ? pos : pos.name));
       setPositions(positionNames);
     } catch (error) {
@@ -54,7 +54,7 @@ export const Dashboard: React.FC = () => {
 
   const fetchOfficeSummary = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/employees/summary-by-office');
+      const response = await api.get('/employees/summary-by-office');
       setOfficeSummary(response.data);
     } catch (error) {
       console.error('Error fetching office summary:', error);
@@ -64,7 +64,7 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchTotalEmployees = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/employees/count');
+        const response = await api.get('/employees/count');
         setTotalEmployees(response.data.total);
       } catch (error) {
         console.error('Error fetching total employees:', error);
@@ -73,7 +73,7 @@ export const Dashboard: React.FC = () => {
 
     const fetchTotalMonthlySalary = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/employees/salary/total');
+        const response = await api.get('/employees/salary/total');
         setTotalMonthlySalary(response.data.totalSalary);
       } catch (error) {
         console.error('Error fetching total salary:', error);
@@ -114,7 +114,7 @@ export const Dashboard: React.FC = () => {
     
     try {
       // Create office first
-      await axios.post('http://localhost:5000/api/masters/offices', {
+      await api.post('/masters/offices', {
         name: newOfficeName
       });
       
@@ -122,7 +122,7 @@ export const Dashboard: React.FC = () => {
       if (officePositions.length > 0) {
         for (const position of officePositions) {
           if (position.positionName.trim()) {
-            await axios.post('http://localhost:5000/api/masters/office-specific-position', {
+            await api.post('/masters/office-specific-position', {
               officeName: newOfficeName,
               positionName: position.positionName,
               reportingTime: position.reportingTime,
@@ -162,7 +162,7 @@ export const Dashboard: React.FC = () => {
     }
     
     try {
-      await axios.post('http://localhost:5000/api/masters/office-specific-position', {
+      await api.post('/masters/office-specific-position', {
         officeName: selectedOfficeForPosition,
         positionName: newPositionName,
         reportingTime: positionReportingTime,

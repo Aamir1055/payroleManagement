@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Employee } from '../../types';
 import { X, RefreshCw } from 'lucide-react';
-import axios from 'axios';
+import api from '../../utils/axiosConfig';
 
 interface EmployeeFormProps {
   employee?: Employee;
@@ -104,7 +104,7 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const generateEmployeeId = async () => {
     setIsGeneratingId(true);
     try {
-      const response = await axios.get('http://localhost:5000/api/employees/next-id');
+      const response = await api.get('/employees/next-id');
       setValue('employeeId', response.data.nextEmployeeId);
     } catch (error) {
       console.error('Failed to generate employee ID:', error);
@@ -117,9 +117,9 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
     const fetchMasterData = async () => {
       try {
         const [officesRes, positionsRes, officePositionsRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/masters/offices'),
-          axios.get('http://localhost:5000/api/masters/positions'),
-          axios.get('http://localhost:5000/api/masters/office-positions')
+          api.get('/masters/offices'),
+          api.get('/masters/positions'),
+          api.get('/masters/office-positions')
         ]);
         
         setOffices(officesRes.data.map((o: any) => o.name || o));

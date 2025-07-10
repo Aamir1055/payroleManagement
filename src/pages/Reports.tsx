@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
 import { Calendar, Users, User, ArrowLeft, AlertTriangle, Download } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/axiosConfig';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
@@ -57,7 +57,7 @@ export const Reports: React.FC = () => {
   const fetchEmployeeSummary = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/reports/employee-summary`, {
+      const response = await api.get(`/reports/employee-summary`, {
         params: { month: selectedMonth, year: selectedYear }
       });
       setEmployeeSummaries(response.data);
@@ -73,7 +73,7 @@ export const Reports: React.FC = () => {
   const fetchEmployeeDetail = async (employeeId: string) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:5000/api/reports/employee-detail/${employeeId}`, {
+      const response = await api.get(`/reports/employee-detail/${employeeId}`, {
         params: { month: selectedMonth, year: selectedYear }
       });
       setSelectedEmployee(response.data);

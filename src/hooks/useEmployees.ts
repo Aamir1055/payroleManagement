@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/axiosConfig';
 import { Employee } from '../types';
 
 export const useEmployees = () => {
@@ -9,7 +9,7 @@ export const useEmployees = () => {
   // ✅ Fetch employees
   const fetchEmployees = () => {
     setLoading(true);
-    axios.get('http://localhost:5000/api/employees')
+    api.get('/employees')
       .then(res => {
         setEmployees(res.data);
         setLoading(false);
@@ -26,7 +26,7 @@ export const useEmployees = () => {
 
   // ✅ Add employee
   const addEmployee = (employee: Employee) => {
-    axios.post('http://localhost:5000/api/employees', employee)
+    api.post('/employees', employee)
       .then(() => {
         fetchEmployees(); // Refresh after adding
       })
@@ -37,7 +37,7 @@ export const useEmployees = () => {
 
   // ✅ Update employee
   const updateEmployee = (employeeId: string, updates: Partial<Employee>) => {
-    axios.put(`http://localhost:5000/api/employees/${employeeId}`, updates)
+    api.put(`/employees/${employeeId}`, updates)
       .then(() => {
         fetchEmployees(); // Refresh after updating
       })
@@ -48,7 +48,7 @@ export const useEmployees = () => {
 
   // ✅ Delete employee
   const deleteEmployee = (employeeId: string) => {
-    axios.delete(`http://localhost:5000/api/employees/${employeeId}`)
+    api.delete(`/employees/${employeeId}`)
       .then(() => {
         fetchEmployees(); // Refresh after deleting
       })
