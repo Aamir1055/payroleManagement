@@ -9,7 +9,7 @@ export const useEmployees = () => {
   // ✅ Fetch employees
   const fetchEmployees = () => {
     setLoading(true);
-    axios.get('/api/employees')
+    axios.get('http://localhost:5000/api/employees')
       .then(res => {
         setEmployees(res.data);
         setLoading(false);
@@ -26,7 +26,7 @@ export const useEmployees = () => {
 
   // ✅ Add employee
   const addEmployee = (employee: Employee) => {
-    axios.post('/api/employees', employee)
+    axios.post('http://localhost:5000/api/employees', employee)
       .then(() => {
         fetchEmployees(); // Refresh after adding
       })
@@ -37,7 +37,7 @@ export const useEmployees = () => {
 
   // ✅ Update employee
   const updateEmployee = (employeeId: string, updates: Partial<Employee>) => {
-    axios.put(`/api/employees/${employeeId}`, updates)
+    axios.put(`http://localhost:5000/api/employees/${employeeId}`, updates)
       .then(() => {
         fetchEmployees(); // Refresh after updating
       })
@@ -48,7 +48,7 @@ export const useEmployees = () => {
 
   // ✅ Delete employee
   const deleteEmployee = (employeeId: string) => {
-    axios.delete(`/api/employees/${employeeId}`)
+    axios.delete(`http://localhost:5000/api/employees/${employeeId}`)
       .then(() => {
         fetchEmployees(); // Refresh after deleting
       })

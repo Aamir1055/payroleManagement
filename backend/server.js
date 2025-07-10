@@ -13,6 +13,7 @@ const attendanceRoutes = require('./routes/attendanceRoutes');
 const payrollRoutes = require('./routes/payrollRoutes');
 const holidaysRoutes = require('./routes/holidaysRoutes');
 const masterRoutes = require('./routes/masterRoutes');
+const reportsRoutes = require('./routes/reportsRoutes');
 
 // Middleware
 app.use(cors());
@@ -36,6 +37,7 @@ app.use('/api/attendance', verifyToken, attendanceRoutes);
 app.use('/api/payroll', verifyToken, requireManager, payrollRoutes); // Admin, HR, and Floor Manager
 app.use('/api/holidays', verifyToken, requireHR, holidaysRoutes); // Admin and HR only
 app.use('/api/masters', verifyToken, requireAdmin, masterRoutes); // Admin only
+app.use('/api/reports', verifyToken, requireManager, reportsRoutes); // Admin, HR, and Floor Manager
 
 // Error handling middleware
 app.use((err, req, res, next) => {

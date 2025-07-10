@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { MainLayout } from '../components/Layout/MainLayout';
-import { Calendar, Plus, Edit, Trash2, AlertCircle, Clock, CalendarDays } from 'lucide-react';
+import { Calendar, Plus, Edit, Trash2, AlertCircle, Clock } from 'lucide-react';
 
 interface Holiday {
   id: number;
   name: string;
   date: string;
-  type: 'public' | 'company' | 'religious';
+  reason: string;
 }
 
 interface WorkingDaysData {
@@ -30,7 +30,7 @@ export const Holidays: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     date: '',
-    type: 'company' as Holiday['type']
+    reason: ''
   });
 
   // Filter states
@@ -38,6 +38,9 @@ export const Holidays: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
   });
+
+  // Fixed late days - non-editable
+  const ALLOWED_LATE_DAYS = 3;
 
   useEffect(() => {
     fetchHolidays();
@@ -87,7 +90,7 @@ export const Holidays: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.date) {
+    if (!formData.name || !formData.date || !formData.reason) {
       alert('Please fill in all required fields');
       return;
     }
@@ -114,7 +117,7 @@ export const Holidays: React.FC = () => {
       alert(result.message || 'Holiday saved successfully!');
       
       // Reset form and refresh data
-      setFormData({ name: '', date: '', type: 'company' });
+      setFormData({ name: '', date: '', reason: '' });
       setShowAddModal(false);
       setEditingHoliday(null);
       
@@ -135,7 +138,7 @@ export const Holidays: React.FC = () => {
     setFormData({
       name: holiday.name,
       date: holiday.date,
-      type: holiday.type
+      reason: holiday.reason
     });
     setShowAddModal(true);
   };
@@ -169,27 +172,9 @@ export const Holidays: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', date: '', type: 'company' });
+    setFormData({ name: '', date: '', reason: '' });
     setEditingHoliday(null);
     setShowAddModal(false);
-  };
-
-  const getTypeColor = (type: Holiday['type']) => {
-    switch (type) {
-      case 'public': return 'bg-blue-100 text-blue-800';
-      case 'religious': return 'bg-purple-100 text-purple-800';
-      case 'company': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getTypeIcon = (type: Holiday['type']) => {
-    switch (type) {
-      case 'public': return '🏛️';
-      case 'religious': return '🕊️';
-      case 'company': return '🏢';
-      default: return '📅';
-    }
   };
 
   // Filter holidays for selected month
@@ -210,7 +195,7 @@ export const Holidays: React.FC = () => {
             <h3 className="text-xl font-semibold mb-4">
               Working Days Calculation - {new Date(workingDaysData.year, workingDaysData.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <div className="text-center">
                 <div className="text-3xl font-bold">{workingDaysData.totalDays}</div>
                 <div className="text-sm opacity-90">Total Days</div>
@@ -226,6 +211,10 @@ export const Holidays: React.FC = () => {
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-200">{workingDaysData.workingDays}</div>
                 <div className="text-sm opacity-90">Working Days</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-yellow-200">{ALLOWED_LATE_DAYS}</div>
+                <div className="text-sm opacity-90">Late Days Allowed</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-yellow-200">{((workingDaysData.workingDays / workingDaysData.totalDays) * 100).toFixed(1)}%</div>
@@ -283,8 +272,8 @@ export const Holidays: React.FC = () => {
                     <div key={holiday.id} className="p-6 hover:bg-gray-50">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
-                          <div className="text-2xl">{getTypeIcon(holiday.type)}</div>
-                          <div>
+                          <div className="text-2xl">🎉</div>
+                          <div className="flex-1">
                             <h4 className="text-lg font-medium text-gray-900">{holiday.name}</h4>
                             <p className="text-sm text-gray-500">
                               {new Date(holiday.date).toLocaleDateString('en-US', { 
@@ -294,30 +283,27 @@ export const Holidays: React.FC = () => {
                                 day: 'numeric' 
                               })}
                             </p>
+                            <p className="text-sm text-blue-600 font-medium mt-1">
+                              Reason: {holiday.reason}
+                            </p>
                           </div>
                         </div>
                         
-                        <div className="flex items-center space-x-3">
-                          <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(holiday.type)}`}>
-                            {holiday.type.charAt(0).toUpperCase() + holiday.type.slice(1)}
-                          </span>
-                          
-                          <div className="flex space-x-1">
-                            <button
-                              onClick={() => handleEdit(holiday)}
-                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full"
-                              title="Edit Holiday"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(holiday.id, holiday.name)}
-                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full"
-                              title="Delete Holiday"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                        <div className="flex space-x-1">
+                          <button
+                            onClick={() => handleEdit(holiday)}
+                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full"
+                            title="Edit Holiday"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(holiday.id, holiday.name)}
+                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-full"
+                            title="Delete Holiday"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -341,13 +327,14 @@ export const Holidays: React.FC = () => {
                 <div className="space-y-3">
                   {upcomingHolidays.slice(0, 5).map((holiday) => (
                     <div key={holiday.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
+                      <div className="flex-1">
                         <div className="font-medium text-sm">{holiday.name}</div>
                         <div className="text-xs text-gray-500">
                           {new Date(holiday.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                         </div>
+                        <div className="text-xs text-blue-600 mt-1">{holiday.reason}</div>
                       </div>
-                      <span className="text-lg">{getTypeIcon(holiday.type)}</span>
+                      <span className="text-lg">🎉</span>
                     </div>
                   ))}
                 </div>
@@ -364,6 +351,7 @@ export const Holidays: React.FC = () => {
                 <p>• Sundays are automatically excluded from working days</p>
                 <p>• Custom holidays affect payroll calculations</p>
                 <p>• Working days are updated in real-time</p>
+                <p>• Late days allowed: {ALLOWED_LATE_DAYS} (fixed)</p>
               </div>
             </div>
           </div>
@@ -415,17 +403,16 @@ export const Holidays: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Type
+                    Reason *
                   </label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as Holiday['type'] })}
+                  <input
+                    type="text"
+                    value={formData.reason}
+                    onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="company">Company Holiday</option>
-                    <option value="public">Public Holiday</option>
-                    <option value="religious">Religious Holiday</option>
-                  </select>
+                    placeholder="e.g., National Holiday, Religious Festival, Company Event"
+                    required
+                  />
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">

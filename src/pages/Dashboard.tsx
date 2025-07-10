@@ -184,8 +184,8 @@ export const Dashboard: React.FC = () => {
       onAddPosition={() => setShowPositionModal(true)}
     >
       <div className="space-y-6">
-        {/* Existing Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Real-time Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <MetricCard
             title="Total Employees"
             value={totalEmployees !== null ? totalEmployees.toString() : '...'}
@@ -199,6 +199,11 @@ export const Dashboard: React.FC = () => {
                 : '...'
             }
             color="green"
+          />
+          <MetricCard
+            title="Total Offices"
+            value={officeSummary.length.toString()}
+            color="purple"
           />
         </div>
 

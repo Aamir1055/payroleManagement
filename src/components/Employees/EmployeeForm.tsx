@@ -343,26 +343,24 @@ export const EmployeeForm: React.FC<EmployeeFormProps> = ({
               )}
             </div>
 
-            {/* Allowed Late Days with validation */}
+            {/* Allowed Late Days - Fixed to 3 and non-editable */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Allowed Late Days</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Allowed Late Days
+                <span className="text-xs text-blue-600 ml-2">(Fixed - Company Policy)</span>
+              </label>
               <input
                 type="number"
-                min="0"
-                max="10"
+                value={3}
                 {...register('allowedLateDays', {
-                  required: 'Allowed late days is required',
-                  min: { value: 0, message: 'Cannot be negative' },
-                  max: { value: 10, message: 'Cannot exceed 10 days' },
+                  value: 3,
                   valueAsNumber: true
                 })}
-                disabled={viewOnly}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
-                placeholder="3"
+                disabled={true}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                readOnly
               />
-              {errors.allowedLateDays && (
-                <p className="mt-1 text-sm text-red-600">{errors.allowedLateDays.message}</p>
-              )}
+              <p className="mt-1 text-xs text-gray-500">Late days allowed is fixed to 3 days per company policy</p>
             </div>
 
             {/* Duty Hours - Auto-populated and conditionally readonly */}
