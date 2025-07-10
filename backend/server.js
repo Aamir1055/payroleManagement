@@ -33,9 +33,9 @@ app.use('/api/auth', authRoutes);
 // Protected routes with role-based access
 app.use('/api/employees', verifyToken, employeeRoutes);
 app.use('/api/attendance', verifyToken, attendanceRoutes);
-app.use('/api/payroll', requireManager, payrollRoutes); // Admin, HR, and Floor Manager
-app.use('/api/holidays', requireHR, holidaysRoutes); // Admin and HR only
-app.use('/api/masters', requireAdmin, masterRoutes); // Admin only
+app.use('/api/payroll', verifyToken, requireManager, payrollRoutes); // Admin, HR, and Floor Manager
+app.use('/api/holidays', verifyToken, requireHR, holidaysRoutes); // Admin and HR only
+app.use('/api/masters', verifyToken, requireAdmin, masterRoutes); // Admin only
 
 // Error handling middleware
 app.use((err, req, res, next) => {
