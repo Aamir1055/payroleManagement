@@ -3,8 +3,8 @@ const bcrypt = require('bcrypt');
 
 const db = mysql.createConnection({
   host: 'localhost',
-  user: 'root',
-  password: '',
+  user: 'payroll_user',
+  password: 'payroll123',
   database: 'payroll_system'
 });
 
