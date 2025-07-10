@@ -2,9 +2,30 @@ const db = require('../db');
 
 // ------------------ OFFICE CONTROLLERS ------------------
 
-// ✅ Get all offices
+// ✅ Get all offices with employee counts and total salaries
 exports.getAllOffices = (req, res) => {
-  db.query('SELECT * FROM OfficeMaster', (err, result) => {
+  const query = `
+    SELECT 
+      o.id,
+      o.name,
+      o.location,
+      COALESCE(emp_summary.employeeCount, 0) as employeeCount,
+      COALESCE(emp_summary.totalSalary, 0) as totalSalary,
+      o.created_at
+    FROM Offices o
+    LEFT JOIN (
+      SELECT 
+        office_id, 
+        COUNT(*) AS employeeCount, 
+        SUM(salary) AS totalSalary 
+      FROM Employees 
+      WHERE status = 1
+      GROUP BY office_id
+    ) emp_summary ON o.id = emp_summary.office_id
+    ORDER BY o.name
+  `;
+  
+  db.query(query, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(result);
   });
@@ -12,109 +33,35 @@ exports.getAllOffices = (req, res) => {
 
 // ✅ Create a new office
 exports.createOffice = (req, res) => {
-  const { name } = req.body;
-  db.query('INSERT INTO OfficeMaster (name) VALUES (?)', [name], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: result.insertId, name });
-  });
-};
-
-// ✅ Create office-specific position
-exports.createOfficeSpecificPosition = (req, res) => {
-  const { officeName, positionName, reportingTime, dutyHours } = req.body;
+  const { name, location } = req.body;
   
-  if (!officeName || !positionName || !reportingTime || !dutyHours) {
-    return res.status(400).json({ error: 'All fields are required' });
+  if (!name) {
+    return res.status(400).json({ error: 'Office name is required' });
   }
-
-  // Start transaction
-  db.beginTransaction((err) => {
-    if (err) return res.status(500).json({ error: err.message });
-
-    // Get office ID
-    db.query('SELECT id FROM OfficeMaster WHERE name = ?', [officeName], (err, officeResult) => {
+  
+  db.query(
+    'INSERT INTO Offices (name, location) VALUES (?, ?)', 
+    [name, location || ''], 
+    (err, result) => {
       if (err) {
-        return db.rollback(() => {
-          res.status(500).json({ error: err.message });
-        });
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(400).json({ error: 'Office name already exists' });
+        }
+        return res.status(500).json({ error: err.message });
       }
-
-      if (officeResult.length === 0) {
-        return db.rollback(() => {
-          res.status(404).json({ error: 'Office not found' });
-        });
-      }
-
-      const officeId = officeResult[0].id;
-
-      // Check if position exists, if not create it
-      db.query('SELECT id FROM PositionMaster WHERE name = ?', [positionName], (err, posResult) => {
-        if (err) {
-          return db.rollback(() => {
-            res.status(500).json({ error: err.message });
-          });
-        }
-
-        let positionId;
-        
-        if (posResult.length > 0) {
-          // Position exists
-          positionId = posResult[0].id;
-          createOfficePositionRelation();
-        } else {
-          // Create new position
-          db.query('INSERT INTO PositionMaster (name) VALUES (?)', [positionName], (err, newPosResult) => {
-            if (err) {
-              return db.rollback(() => {
-                res.status(500).json({ error: err.message });
-              });
-            }
-            positionId = newPosResult.insertId;
-            createOfficePositionRelation();
-          });
-        }
-
-        function createOfficePositionRelation() {
-          // Create office-position relationship with schedule
-          const insertQuery = `
-            INSERT INTO OfficePositions (office_id, position_id, reporting_time, duty_hours)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-            reporting_time = VALUES(reporting_time),
-            duty_hours = VALUES(duty_hours)
-          `;
-          
-          db.query(insertQuery, [officeId, positionId, reportingTime, dutyHours], (err) => {
-            if (err) {
-              return db.rollback(() => {
-                res.status(500).json({ error: 'Failed to create office-position relationship: ' + err.message });
-              });
-            }
-            
-            db.commit((err) => {
-              if (err) {
-                return db.rollback(() => {
-                  res.status(500).json({ error: err.message });
-                });
-              }
-              res.status(201).json({ 
-                message: 'Position added to office successfully',
-                officeName,
-                positionName,
-                reportingTime,
-                dutyHours
-              });
-            });
-          });
-        }
+      res.status(201).json({ 
+        id: result.insertId, 
+        name, 
+        location: location || '',
+        message: 'Office created successfully'
       });
-    });
-  });
+    }
+  );
 };
 
 // ✅ Create office with positions and their schedules
 exports.createOfficeWithPositions = (req, res) => {
-  const { officeName, positions } = req.body;
+  const { officeName, location, positions } = req.body;
   
   if (!officeName || !positions || positions.length === 0) {
     return res.status(400).json({ error: 'Office name and positions are required' });
@@ -125,119 +72,128 @@ exports.createOfficeWithPositions = (req, res) => {
     if (err) return res.status(500).json({ error: err.message });
 
     // First, create the office
-    db.query('INSERT INTO OfficeMaster (name) VALUES (?)', [officeName], (err, officeResult) => {
-      if (err) {
-        return db.rollback(() => {
-          res.status(500).json({ error: err.message });
-        });
-      }
-
-      const officeId = officeResult.insertId;
-      let positionsProcessed = 0;
-      let errors = [];
-
-      // For each position, create it if it doesn't exist and create office-position relationship
-      positions.forEach((position, index) => {
-        const { positionName, reportingTime, dutyHours } = position;
-        
-        if (!positionName || !reportingTime || !dutyHours) {
-          errors.push(`Position at index ${index} is missing required fields`);
-          positionsProcessed++;
-          checkCompletion();
-          return;
+    db.query(
+      'INSERT INTO Offices (name, location) VALUES (?, ?)', 
+      [officeName, location || ''], 
+      (err, officeResult) => {
+        if (err) {
+          return db.rollback(() => {
+            if (err.code === 'ER_DUP_ENTRY') {
+              res.status(400).json({ error: 'Office name already exists' });
+            } else {
+              res.status(500).json({ error: err.message });
+            }
+          });
         }
 
-        // Check if position exists, if not create it
-        db.query('SELECT id FROM PositionMaster WHERE name = ?', [positionName], (err, posResult) => {
-          if (err) {
-            errors.push(`Error checking position ${positionName}: ${err.message}`);
+        const officeId = officeResult.insertId;
+        let positionsProcessed = 0;
+        let errors = [];
+
+        // For each position, create it if it doesn't exist and create office-position relationship
+        positions.forEach((position, index) => {
+          const { positionName, reportingTime, dutyHours } = position;
+          
+          if (!positionName || !reportingTime || !dutyHours) {
+            errors.push(`Position at index ${index} is missing required fields`);
             positionsProcessed++;
             checkCompletion();
             return;
           }
 
-          let positionId;
-          
-          if (posResult.length > 0) {
-            // Position exists
-            positionId = posResult[0].id;
-            createOfficePositionRelation();
-          } else {
-            // Create new position
-            db.query('INSERT INTO PositionMaster (name) VALUES (?)', [positionName], (err, newPosResult) => {
-              if (err) {
-                errors.push(`Error creating position ${positionName}: ${err.message}`);
-                positionsProcessed++;
-                checkCompletion();
-                return;
-              }
-              positionId = newPosResult.insertId;
-              createOfficePositionRelation();
-            });
-          }
-
-          function createOfficePositionRelation() {
-            // Create office-position relationship with schedule
-            const insertQuery = `
-              INSERT INTO OfficePositions (office_id, position_id, reporting_time, duty_hours)
-              VALUES (?, ?, ?, ?)
-              ON DUPLICATE KEY UPDATE 
-              reporting_time = VALUES(reporting_time),
-              duty_hours = VALUES(duty_hours)
-            `;
-            
-            db.query(insertQuery, [officeId, positionId, reportingTime, dutyHours], (err) => {
-              if (err) {
-                errors.push(`Error creating office-position relation for ${positionName}: ${err.message}`);
-              }
+          // Check if position exists, if not create it
+          db.query('SELECT id FROM Positions WHERE title = ?', [positionName], (err, posResult) => {
+            if (err) {
+              errors.push(`Error checking position ${positionName}: ${err.message}`);
               positionsProcessed++;
               checkCompletion();
-            });
-          }
-        });
-      });
+              return;
+            }
 
-      function checkCompletion() {
-        if (positionsProcessed === positions.length) {
-          if (errors.length > 0) {
-            return db.rollback(() => {
-              res.status(500).json({ error: 'Some positions failed to create', details: errors });
-            });
-          }
-          
-          db.commit((err) => {
-            if (err) {
-              return db.rollback(() => {
-                res.status(500).json({ error: err.message });
+            let positionId;
+            
+            if (posResult.length > 0) {
+              // Position exists
+              positionId = posResult[0].id;
+              createOfficePositionRelation();
+            } else {
+              // Create new position
+              db.query('INSERT INTO Positions (title) VALUES (?)', [positionName], (err, newPosResult) => {
+                if (err) {
+                  errors.push(`Error creating position ${positionName}: ${err.message}`);
+                  positionsProcessed++;
+                  checkCompletion();
+                  return;
+                }
+                positionId = newPosResult.insertId;
+                createOfficePositionRelation();
               });
             }
-            res.status(201).json({ 
-              message: 'Office and positions created successfully',
-              officeId,
-              officeName,
-              positionsCount: positions.length
-            });
+
+            function createOfficePositionRelation() {
+              // Create office-position relationship with schedule
+              const insertQuery = `
+                INSERT INTO OfficePositions (office_id, position_id, reporting_time, duty_hours)
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                reporting_time = VALUES(reporting_time),
+                duty_hours = VALUES(duty_hours)
+              `;
+              
+              db.query(insertQuery, [officeId, positionId, reportingTime, dutyHours], (err) => {
+                if (err) {
+                  errors.push(`Error creating office-position relation for ${positionName}: ${err.message}`);
+                }
+                positionsProcessed++;
+                checkCompletion();
+              });
+            }
           });
+        });
+
+        function checkCompletion() {
+          if (positionsProcessed === positions.length) {
+            if (errors.length > 0) {
+              return db.rollback(() => {
+                res.status(500).json({ error: 'Some positions failed to create', details: errors });
+              });
+            }
+            
+            db.commit((err) => {
+              if (err) {
+                return db.rollback(() => {
+                  res.status(500).json({ error: err.message });
+                });
+              }
+              res.status(201).json({ 
+                message: 'Office and positions created successfully',
+                officeId,
+                officeName,
+                positionsCount: positions.length
+              });
+            });
+          }
         }
       }
-    });
+    );
   });
 };
 
-// ✅ Get office positions with schedules
+// ✅ Get office positions with schedules for dropdown population
 exports.getOfficePositions = (req, res) => {
   const query = `
     SELECT 
-      om.id as office_id,
-      om.name as office_name,
-      pm.id as position_id,
-      pm.name as position_name,
+      o.id as office_id,
+      o.name as office_name,
+      o.location,
+      p.id as position_id,
+      p.title as position_name,
       op.reporting_time,
       op.duty_hours
-    FROM OfficeMaster om
-    LEFT JOIN OfficePositions op ON om.id = op.office_id
-    LEFT JOIN PositionMaster pm ON op.position_id = pm.id
-    ORDER BY om.name, pm.name
+    FROM Offices o
+    LEFT JOIN OfficePositions op ON o.id = op.office_id
+    LEFT JOIN Positions p ON op.position_id = p.id
+    ORDER BY o.name, p.title
   `;
   
   db.query(query, (err, result) => {
@@ -250,6 +206,7 @@ exports.getOfficePositions = (req, res) => {
         groupedData[row.office_name] = {
           office_id: row.office_id,
           office_name: row.office_name,
+          location: row.location,
           positions: []
         };
       }
@@ -268,11 +225,38 @@ exports.getOfficePositions = (req, res) => {
   });
 };
 
+// ✅ Get position details for specific office (for employee form auto-population)
+exports.getOfficePositionDetails = (req, res) => {
+  const { officeId, positionId } = req.params;
+  
+  const query = `
+    SELECT 
+      op.reporting_time,
+      op.duty_hours,
+      o.name as office_name,
+      p.title as position_name
+    FROM OfficePositions op
+    JOIN Offices o ON op.office_id = o.id
+    JOIN Positions p ON op.position_id = p.id
+    WHERE op.office_id = ? AND op.position_id = ?
+  `;
+  
+  db.query(query, [officeId, positionId], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Office-Position combination not found' });
+    }
+    
+    res.json(result[0]);
+  });
+};
+
 // ------------------ POSITION CONTROLLERS ------------------
 
 // ✅ Get all positions
 exports.getAllPositions = (req, res) => {
-  db.query('SELECT * FROM PositionMaster', (err, result) => {
+  db.query('SELECT * FROM Positions ORDER BY title', (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(result);
   });
@@ -280,9 +264,82 @@ exports.getAllPositions = (req, res) => {
 
 // ✅ Create a new position
 exports.createPosition = (req, res) => {
-  const { name } = req.body;
-  db.query('INSERT INTO PositionMaster (name) VALUES (?)', [name], (err, result) => {
+  const { title, description } = req.body;
+  
+  if (!title) {
+    return res.status(400).json({ error: 'Position title is required' });
+  }
+  
+  db.query(
+    'INSERT INTO Positions (title, description) VALUES (?, ?)', 
+    [title, description || ''], 
+    (err, result) => {
+      if (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          return res.status(400).json({ error: 'Position title already exists' });
+        }
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json({ 
+        id: result.insertId, 
+        title, 
+        description: description || '',
+        message: 'Position created successfully'
+      });
+    }
+  );
+};
+
+// ✅ Create office-specific position with schedule
+exports.createOfficeSpecificPosition = (req, res) => {
+  const { officeId, positionId, reportingTime, dutyHours } = req.body;
+  
+  if (!officeId || !positionId || !reportingTime || !dutyHours) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  const insertQuery = `
+    INSERT INTO OfficePositions (office_id, position_id, reporting_time, duty_hours)
+    VALUES (?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE 
+    reporting_time = VALUES(reporting_time),
+    duty_hours = VALUES(duty_hours)
+  `;
+  
+  db.query(insertQuery, [officeId, positionId, reportingTime, dutyHours], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.status(201).json({ id: result.insertId, name });
+    
+    res.status(201).json({ 
+      message: 'Office-Position relationship created/updated successfully',
+      officeId,
+      positionId,
+      reportingTime,
+      dutyHours
+    });
+  });
+};
+
+// ✅ Dashboard summary with office-wise breakdown
+exports.getDashboardSummary = (req, res) => {
+  const query = `
+    SELECT 
+      COUNT(DISTINCT o.id) as totalOffices,
+      COUNT(DISTINCT p.id) as totalPositions,
+      COALESCE(emp_summary.totalEmployees, 0) as totalEmployees,
+      COALESCE(emp_summary.totalSalary, 0) as totalSalary
+    FROM Offices o
+    CROSS JOIN Positions p
+    LEFT JOIN (
+      SELECT 
+        COUNT(*) AS totalEmployees, 
+        SUM(salary) AS totalSalary 
+      FROM Employees 
+      WHERE status = 1
+    ) emp_summary ON 1=1
+  `;
+  
+  db.query(query, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(result[0]);
   });
 };

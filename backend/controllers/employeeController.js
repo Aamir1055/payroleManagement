@@ -7,7 +7,7 @@ const path = require('path');
 const generateNextEmployeeId = async () => {
   return new Promise((resolve, reject) => {
     db.query(
-      'SELECT employeeId FROM employees WHERE employeeId REGEXP "^EMP[0-9]+$" ORDER BY CAST(SUBSTRING(employeeId, 4) AS UNSIGNED) DESC LIMIT 1',
+      'SELECT employee_id FROM Employees WHERE employee_id REGEXP "^EMP[0-9]+$" ORDER BY CAST(SUBSTRING(employee_id, 4) AS UNSIGNED) DESC LIMIT 1',
       (err, results) => {
         if (err) {
           reject(err);
@@ -16,7 +16,7 @@ const generateNextEmployeeId = async () => {
         
         let nextNumber = 1;
         if (results.length > 0) {
-          const lastId = results[0].employeeId;
+          const lastId = results[0].employee_id;
           const lastNumber = parseInt(lastId.substring(3));
           nextNumber = lastNumber + 1;
         }
@@ -39,9 +39,23 @@ exports.getNextEmployeeId = (req, res) => {
     });
 };
 
-// ✅ Get all employees
+// ✅ Get all employees with office and position details
 exports.getEmployees = (req, res) => {
-  db.query('SELECT * FROM employees', (err, results) => {
+  const query = `
+    SELECT 
+      e.*,
+      o.name as office_name,
+      p.title as position_name,
+      op.reporting_time,
+      op.duty_hours
+    FROM Employees e
+    LEFT JOIN Offices o ON e.office_id = o.id
+    LEFT JOIN Positions p ON e.position_id = p.id
+    LEFT JOIN OfficePositions op ON e.office_id = op.office_id AND e.position_id = op.position_id
+    ORDER BY e.employee_id
+  `;
+  
+  db.query(query, (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(results);
   });
@@ -50,7 +64,21 @@ exports.getEmployees = (req, res) => {
 // ✅ Get employee by ID
 exports.getEmployeeById = (req, res) => {
   const { employeeId } = req.params;
-  db.query('SELECT * FROM employees WHERE employeeId = ?', [employeeId], (err, results) => {
+  const query = `
+    SELECT 
+      e.*,
+      o.name as office_name,
+      p.title as position_name,
+      op.reporting_time,
+      op.duty_hours
+    FROM Employees e
+    LEFT JOIN Offices o ON e.office_id = o.id
+    LEFT JOIN Positions p ON e.position_id = p.id
+    LEFT JOIN OfficePositions op ON e.office_id = op.office_id AND e.position_id = op.position_id
+    WHERE e.employee_id = ?
+  `;
+  
+  db.query(query, [employeeId], (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     if (results.length === 0) return res.status(404).json({ message: 'Employee not found' });
     res.json(results[0]);
@@ -61,32 +89,26 @@ exports.getEmployeeById = (req, res) => {
 exports.createEmployee = async (req, res) => {
   try {
     const {
-      fullName, email, office, position,
-      monthlySalary, dutyHours, reportingTime,
-      allowedLateDays, joiningDate, status
+      name, email, phone, office_id, position_id, salary, hire_date, status
     } = req.body;
 
-    // Auto-generate employee ID if not provided
-    let { employeeId } = req.body;
-    if (!employeeId || employeeId.trim() === '') {
-      employeeId = await generateNextEmployeeId();
-    }
+    // Auto-generate employee ID
+    const employee_id = await generateNextEmployeeId();
 
     // Validate required fields
-    if (!fullName || !email || !office || !position || !monthlySalary || !joiningDate) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    if (!name || !email || !office_id || !position_id || !salary || !hire_date) {
+      return res.status(400).json({ error: 'Missing required fields: name, email, office_id, position_id, salary, hire_date' });
     }
 
     const query = `
-      INSERT INTO employees 
-      (employeeId, fullName, email, office, position, monthlySalary, dutyHours, reportingTime, allowedLateDays, joiningDate, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO Employees 
+      (employee_id, name, email, phone, office_id, position_id, salary, hire_date, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const values = [
-      employeeId, fullName, email, office, position,
-      monthlySalary, dutyHours || 8, reportingTime || '09:00',
-      allowedLateDays || 3, joiningDate, status || 'active'
+      employee_id, name, email, phone || '', office_id, position_id,
+      salary, hire_date, status !== undefined ? status : 1
     ];
 
     db.query(query, values, (err, result) => {
@@ -98,7 +120,7 @@ exports.createEmployee = async (req, res) => {
       }
       res.status(201).json({ 
         message: 'Employee created successfully', 
-        employeeId: employeeId,
+        employee_id: employee_id,
         id: result.insertId 
       });
     });
@@ -113,13 +135,13 @@ exports.updateEmployee = (req, res) => {
   const updates = req.body;
 
   // Don't allow updating the employee ID
-  delete updates.employeeId;
+  delete updates.employee_id;
 
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No valid fields to update' });
   }
 
-  db.query('UPDATE employees SET ? WHERE employeeId = ?', [updates, employeeId], (err, result) => {
+  db.query('UPDATE Employees SET ? WHERE employee_id = ?', [updates, employeeId], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -132,7 +154,7 @@ exports.updateEmployee = (req, res) => {
 exports.deleteEmployee = (req, res) => {
   const { employeeId } = req.params;
 
-  db.query('DELETE FROM employees WHERE employeeId = ?', [employeeId], (err, result) => {
+  db.query('DELETE FROM Employees WHERE employee_id = ?', [employeeId], (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Employee not found' });
@@ -162,42 +184,36 @@ exports.importEmployees = async (req, res) => {
     const processedData = [];
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      let employeeId = row['Employee ID']?.toString().trim();
       
-      // Auto-generate ID if not provided or empty
-      if (!employeeId || employeeId === '') {
-        employeeId = await generateNextEmployeeId();
-      }
+      // Auto-generate ID (Excel import shouldn't include employee ID)
+      const employee_id = await generateNextEmployeeId();
 
+      // Map Excel columns to database fields
       processedData.push([
-        employeeId,
-        row['Full Name'] || '',
+        employee_id,
+        row['Name'] || row['Full Name'] || '',
         row['Email'] || '',
-        row['Office'] || '',
-        row['Position'] || '',
-        Number(row['Monthly Salary (AED)']) || 0,
-        Number(row['Duty Hours']) || 8,
-        row['Reporting Time'] || '09:00',
-        Number(row['Allowed Late Days']) || 3,
-        row['Joining Date'] || '',
-        row['Status']?.toLowerCase() === 'inactive' ? 'inactive' : 'active'
+        row['Phone'] || '',
+        parseInt(row['Office ID']) || null,
+        parseInt(row['Position ID']) || null,
+        Number(row['Salary']) || 0,
+        row['Hire Date'] || row['Joining Date'] || '',
+        row['Status']?.toLowerCase() === 'inactive' ? 0 : 1
       ]);
     }
 
     const query = `
-      INSERT INTO employees
-      (employeeId, fullName, email, office, position, monthlySalary, dutyHours, reportingTime, allowedLateDays, joiningDate, status)
+      INSERT INTO Employees
+      (employee_id, name, email, phone, office_id, position_id, salary, hire_date, status)
       VALUES ?
       ON DUPLICATE KEY UPDATE
-        fullName = VALUES(fullName),
+        name = VALUES(name),
         email = VALUES(email),
-        office = VALUES(office),
-        position = VALUES(position),
-        monthlySalary = VALUES(monthlySalary),
-        dutyHours = VALUES(dutyHours),
-        reportingTime = VALUES(reportingTime),
-        allowedLateDays = VALUES(allowedLateDays),
-        joiningDate = VALUES(joiningDate),
+        phone = VALUES(phone),
+        office_id = VALUES(office_id),
+        position_id = VALUES(position_id),
+        salary = VALUES(salary),
+        hire_date = VALUES(hire_date),
         status = VALUES(status)
     `;
 
@@ -215,9 +231,57 @@ exports.importEmployees = async (req, res) => {
   }
 };
 
+// ✅ Export employees template (for Excel download)
+exports.exportEmployeesTemplate = (req, res) => {
+  // Get offices and positions for reference
+  const officesQuery = 'SELECT id, name FROM Offices ORDER BY name';
+  const positionsQuery = 'SELECT id, title FROM Positions ORDER BY title';
+  
+  db.query(officesQuery, (err, offices) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    db.query(positionsQuery, (err, positions) => {
+      if (err) return res.status(500).json({ error: err.message });
+      
+      // Create sample template data
+      const templateData = [
+        {
+          'Name': 'John Doe',
+          'Email': 'john.doe@example.com',
+          'Phone': '+971501234567',
+          'Office ID': offices.length > 0 ? offices[0].id : 1,
+          'Position ID': positions.length > 0 ? positions[0].id : 1,
+          'Salary': 5000,
+          'Hire Date': '2025-01-01',
+          'Status': 'active'
+        }
+      ];
+      
+      // Create workbook
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Employees');
+      
+      // Create reference sheets
+      const officeWs = XLSX.utils.json_to_sheet(offices.map(o => ({ 'Office ID': o.id, 'Office Name': o.name })));
+      const positionWs = XLSX.utils.json_to_sheet(positions.map(p => ({ 'Position ID': p.id, 'Position Title': p.title })));
+      
+      XLSX.utils.book_append_sheet(wb, officeWs, 'Office Reference');
+      XLSX.utils.book_append_sheet(wb, positionWs, 'Position Reference');
+      
+      // Generate buffer
+      const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      
+      res.setHeader('Content-Disposition', 'attachment; filename=employee_template.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(buffer);
+    });
+  });
+};
+
 // ✅ Get total employee count
 exports.getEmployeeCount = (req, res) => {
-  db.query('SELECT COUNT(*) AS total FROM employees WHERE status = "active"', (err, results) => {
+  db.query('SELECT COUNT(*) AS total FROM Employees WHERE status = 1', (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ total: results[0].total });
   });
@@ -225,7 +289,7 @@ exports.getEmployeeCount = (req, res) => {
 
 // ✅ Get total monthly salary
 exports.getTotalMonthlySalary = (req, res) => {
-  db.query('SELECT SUM(monthlySalary) AS totalSalary FROM employees WHERE status = "active"', (err, results) => {
+  db.query('SELECT SUM(salary) AS totalSalary FROM Employees WHERE status = 1', (err, results) => {
     if (err) return res.status(500).json({ error: err.message });
     const totalSalary = results[0].totalSalary || 0;
     res.json({ totalSalary });
@@ -236,20 +300,21 @@ exports.getTotalMonthlySalary = (req, res) => {
 exports.getSummaryByOffice = (req, res) => {
   const query = `
     SELECT 
-      om.name as office,
+      o.id as office_id,
+      o.name as office,
       COALESCE(emp_summary.totalEmployees, 0) as totalEmployees,
       COALESCE(emp_summary.totalSalary, 0) as totalSalary
-    FROM OfficeMaster om
+    FROM Offices o
     LEFT JOIN (
       SELECT 
-        office, 
+        office_id, 
         COUNT(*) AS totalEmployees, 
-        SUM(monthlySalary) AS totalSalary 
-      FROM employees 
-      WHERE status = 'active'
-      GROUP BY office
-    ) emp_summary ON om.name = emp_summary.office
-    ORDER BY om.name
+        SUM(salary) AS totalSalary 
+      FROM Employees 
+      WHERE status = 1
+      GROUP BY office_id
+    ) emp_summary ON o.id = emp_summary.office_id
+    ORDER BY o.name
   `;
 
   db.query(query, (err, results) => {

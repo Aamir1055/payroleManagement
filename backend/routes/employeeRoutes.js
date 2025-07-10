@@ -10,6 +10,7 @@ router.get('/next-id', employeeController.getNextEmployeeId);
 router.get('/count', employeeController.getEmployeeCount);
 router.get('/salary/total', employeeController.getTotalMonthlySalary);
 router.get('/summary-by-office', employeeController.getSummaryByOffice);
+router.get('/template/download', employeeController.exportEmployeesTemplate);
 router.post('/', employeeController.createEmployee);
 router.post('/import', upload.single('file'), employeeController.importEmployees);
 

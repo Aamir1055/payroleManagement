@@ -45,7 +45,8 @@ exports.login = async (req, res) => {
           secret: user.two_factor_secret,
           encoding: 'base32',
           token: twoFactorCode,
-          window: 2
+          window: 6,
+          step: 30
         });
 
         if (!verified) {
@@ -165,12 +166,13 @@ exports.verify2FASetup = async (req, res) => {
 
       const secret = users[0].two_factor_secret;
 
-      // Verify the token
+      // Verify the token with larger window for better compatibility
       const verified = speakeasy.totp.verify({
         secret: secret,
         encoding: 'base32',
         token: token,
-        window: 2
+        window: 6,
+        step: 30
       });
 
       if (!verified) {
@@ -228,7 +230,8 @@ exports.disable2FA = async (req, res) => {
         secret: user.two_factor_secret,
         encoding: 'base32',
         token: token,
-        window: 2
+        window: 6,
+        step: 30
       });
 
       if (!verified) {
